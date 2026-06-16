@@ -6,7 +6,7 @@ import React, { useState, useEffect } from "react";
 import { FiPlus, FiTrash2 } from "react-icons/fi";
 
 interface Props { isOpen: boolean; onClose: () => void; category: ICategory | null; }
-
+//gh
 export const EditCategoryModal: React.FC<Props> = ({ isOpen, onClose, category }) => {
   const { updateCategory } = useCategories();
   const [name, setName] = useState("");
