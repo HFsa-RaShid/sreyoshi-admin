@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import React from "react";
 
 export default function ProductsPage() {
@@ -11,9 +12,11 @@ export default function ProductsPage() {
           <p className="text-xs text-gray-400 mt-1">Add, update or delete products from your catalog.</p>
         </div>
         
+        <Link href="/add-products">
         <button className="bg-[#1E2E24] hover:bg-[#FF3F6C] text-white px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-md">
           + Add New Product
         </button>
+        </Link>
       </div>
 
       {/* ডাটা টেবিল বা ফরম বসানোর প্লেসহোল্ডার বক্স */}
