@@ -1,56 +1,69 @@
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Upload, X, Search } from "lucide-react";
+import { Loader2, Upload, X, Plus, Trash2 } from "lucide-react";
 import { ICategory, ISubCategoryItem } from "@/types/category.interface";
-import { useCategories } from "@/hooks/useCategories"; // 👈 আপনার হুকটি এখানে ইম্পোর্ট করুন
+import { useCategories } from "@/hooks/useCategories";
+import { useProducts } from "@/hooks/useProducts"; 
 
-// প্রোডাক্ট ক্রিয়েট করার জন্য যদি আলাদা হুক থাকে তা এখানে ইম্পোর্ট করবেন। 
-// সাময়িকভাবে এক্সিওস বা ডামি দিয়ে কানেক্ট করা আছে।
-import axios from "axios";
+// Rich Text Editor
+import DynamicReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
+
+interface IShadeState {
+  shadeName: string;
+  shadeColorCode: string;
+  shadeFile: File | null;
+  shadePreview: string;
+  stock: number | "";
+  status: "Active" | "Inactive";
+}
+
+const editorModules = {
+  toolbar: [
+    [{ header: [1, 2, 3, false] }],
+    ["bold", "italic", "underline", "blockquote"],
+    [{ list: "ordered" }, { list: "bullet" }],
+    ["link", "clean"],
+  ],
+};
 
 export default function AddProductPage() {
   const router = useRouter();
-
-  // ১. TanStack Query হুক দিয়ে রিয়েল ব্যাকএন্ড থেকে ক্যাটাগরি ডেটা নিয়ে আসা
   const { categories, isLoading: isCategoriesLoading } = useCategories();
+  const { createProduct } = useProducts(); 
   
-  // প্রোডাক্ট লিস্ট এবং ক্রিয়েশন মিউটেশন (প্রয়োজন অনুযায়ী আপনার আসল প্রোডাক্ট হুক দিয়ে রিপ্লেস করবেন)
-  const productsData: any[] = []; 
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
 
-  // --- FORM STATES (Image 18-6-26 at 12.39 PM.png অনুযায়ী) ---
+  // --- FORM STATES ---
+  const [productCode, setProductCode] = useState(""); 
   const [productName, setProductName] = useState("");
-  const [sku, setSku] = useState("");
-  const [productType, setProductType] = useState("Single");
-  const [brand, setBrand] = useState("");
+  const [skinType, setSkinType] = useState("All");
+  const [promotion, setPromotion] = useState("None");
   
-  const [purchasePrice, setPurchasePrice] = useState<number | "">("");
   const [sellPrice, setSellPrice] = useState<number | "">("");
-  const [regularPrice, setRegularPrice] = useState<number | "">("");
-  const [stock, setStock] = useState<number | "">("");
-  const [stockOut, setStockOut] = useState(false);
+  const [regularPrice, setRegularPrice] = useState<number | "">(""); 
+  const [weightOrVolume, setWeightOrVolume] = useState<number | "">(30);
+  const [unit, setUnit] = useState<"gm" | "ml" | "pcs">("ml"); 
   const [productStatus, setProductStatus] = useState<"Active" | "Inactive">("Active");
 
-  // ক্যাটাগরি ও সাব-ক্যাটাগরি স্টেট
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSubCategory, setSelectedSubCategory] = useState("");
 
-  // রিলেটেড প্রোডাক্ট স্টেট (Image 18-6-26 at 12.40 PM.png অনুযায়ী)
-  const [relatedProductQuery, setRelatedProductQuery] = useState("");
-  const [selectedRelatedProducts, setSelectedRelatedProducts] = useState<string[]>([]);
+  const [description, setDescription] = useState("");
+  const [howToUse, setHowToUse] = useState("");
 
-  // ডেসক্রিপশন স্টেট
-  const [shortDescription, setShortDescription] = useState("");
-  const [longDescription, setLongDescription] = useState("");
-
-  // ইমেজ স্টেট
+  // IMAGE STATES
   const [singleImage, setSingleImage] = useState<File | null>(null);
   const [singleImagePreview, setSingleImagePreview] = useState<string | null>(null);
   const [multiImages, setMultiImages] = useState<File[]>([]);
   const [multiImagePreviews, setMultiImagePreviews] = useState<string[]>([]);
+
+  // SHADES STATE
+  const [shades, setShades] = useState<IShadeState[]>([]);
 
   // --- IMAGE HANDLERS ---
   const handleSingleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,16 +74,16 @@ export default function AddProductPage() {
     }
   };
 
+  // 💡 গ্যালারি ইমেজ সর্বোচ্চ ৩টি নেওয়া যাবে (মেইন ১টি + গ্যালারি ৩টি = মোট ৪টি ছবি Multer লিমিট)
   const handleMultiImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const filesArray = Array.from(e.target.files);
-      if (multiImages.length + filesArray.length > 4) {
-        alert("Up to 4 additional images are allowed.");
+      if (multiImages.length + filesArray.length > 3) {
+        alert("Maximum 3 gallery images allowed (Total 4 with main image) due to backend limits.");
         return;
       }
       setMultiImages((prev) => [...prev, ...filesArray]);
-      const newPreviews = filesArray.map((file) => URL.createObjectURL(file));
-      setMultiImagePreviews((prev) => [...prev, ...newPreviews]);
+      setMultiImagePreviews((prev) => [...prev, ...filesArray.map(f => URL.createObjectURL(f))]);
     }
   };
 
@@ -79,10 +92,41 @@ export default function AddProductPage() {
     setMultiImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // 🔹 API থেকে আসা ডেটা আর্কিটেকচার (String | ISubCategoryItem) নিখুঁতভাবে রেন্ডার করার মেমো
+  // --- SHADES HANDLERS ---
+  const addShadeField = () => {
+    setShades((prev) => [
+      ...prev,
+      { shadeName: "", shadeColorCode: "#000000", shadeFile: null, shadePreview: "", stock: "", status: "Active" }
+    ]);
+  };
+
+  const removeShadeField = (index: number) => {
+    setShades((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleShadeChange = (index: number, field: keyof IShadeState, value: any) => {
+    setShades((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const handleShadeImageChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      handleShadeChange(index, "shadeFile", file);
+      handleShadeChange(index, "shadePreview", URL.createObjectURL(file));
+    }
+  };
+
+  const isMakeupSelected = useMemo(() => {
+    const matched = categories?.find((cat) => cat._id === selectedCategory);
+    return matched?.name?.toLowerCase() === "makeup";
+  }, [selectedCategory, categories]);
+
   const availableSubCategoryItems = useMemo(() => {
     if (!categories || categories.length === 0) return [];
-    
     const matchedCat = categories.find((cat) => cat._id === selectedCategory);
     if (!matchedCat || !matchedCat.subCategories) return [];
     
@@ -103,70 +147,85 @@ export default function AddProductPage() {
     return itemsList;
   }, [selectedCategory, categories]);
 
-  // রিলেটেড প্রোডাক্ট ফিল্টার
-  const filteredRelatedProducts = useMemo(() => {
-    if (!relatedProductQuery.trim()) return productsData.slice(0, 3);
-    return productsData.filter((prod) =>
-      prod.name.toLowerCase().includes(relatedProductQuery.toLowerCase())
-    );
-  }, [relatedProductQuery, productsData]);
-
-  const toggleRelatedProduct = (id: string) => {
-    setSelectedRelatedProducts((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
   // --- SUBMIT FORM ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productName || !sellPrice || !selectedCategory) {
-      alert("Please fill in the required fields.");
+
+    const cleanDescription = description.replace(/<(.|\n)*?>/g, "").trim() === "" ? "" : description;
+    const cleanHowToUse = howToUse.replace(/<(.|\n)*?>/g, "").trim() === "" ? "" : howToUse;
+
+    if (!productCode || !productName || !sellPrice || !selectedCategory || !cleanDescription) {
+      alert("Please fill out required fields (SKU, Name, Price, Category, and Description).");
       return;
     }
 
     setIsCreatingProduct(true);
     const formData = new FormData();
     
-    // ব্যাকএন্ড স্কিমার সাথে মিল রেখে সাব-ক্যাটাগরি টাইটেল খোঁজা
-    const matchedCat = categories.find((cat) => cat._id === selectedCategory);
+    const matchedCat = categories?.find((cat) => cat._id === selectedCategory);
     const subCategoryGroupTitle = matchedCat?.subCategories.find((sub) =>
-      sub.items.some((item) => {
-        const name = typeof item === "object" ? item.name : item;
-        return name === selectedSubCategory;
-      })
-    )?.title || "";
+      sub.items.some((item) => (typeof item === "object" ? item.name : item) === selectedSubCategory)
+    )?.title || "General";
 
-    const productPayload = {
-      productCode: sku || `PROD-${Date.now().toString().slice(-6)}`,
+    const totalStock = isMakeupSelected 
+      ? shades.reduce((acc, curr) => acc + Number(curr.stock || 0), 0)
+      : 50; 
+
+    // Mongoose Model অনুযায়ী ১০০% সঠিক ডাটা স্ট্রাকচার
+    const productPayload: any = {
+      productCode: productCode,
       name: productName,
       category: selectedCategory,
       subCategory: subCategoryGroupTitle, 
-      itemName: selectedSubCategory,       
+      itemName: selectedSubCategory || "General",    
       price: Number(sellPrice),
       oldPrice: regularPrice ? Number(regularPrice) : undefined,
-      description: longDescription || shortDescription,
-      availability: stock && Number(stock) > 0 ? "In Stock" : "Out of Stock",
+      isDiscountDisabled: false, 
+      description: cleanDescription, 
+      howToUse: cleanHowToUse || undefined,
+      rating: 0,
+      ratingCount: 0,
+      salesCount: 0,
+      skinType: skinType !== "All" ? skinType : undefined,
+      promotion: promotion !== "None" ? promotion : undefined,
+      availability: totalStock > 0 ? "In Stock" : "Out of Stock",
       status: productStatus,
-      isDiscountDisabled: false,
-      weightOrVolume: 30, 
-      unit: "ml",
+      weightOrVolume: Number(weightOrVolume),
+      unit: unit, 
+      shades: [] 
     };
+
+    if (isMakeupSelected) {
+      productPayload.shades = shades.map((sh) => ({
+        shadeName: sh.shadeName,
+        shadeColorCode: sh.shadeColorCode,
+        stock: Number(sh.stock || 0),
+        status: sh.status
+      }));
+    }
 
     formData.append("data", JSON.stringify(productPayload));
 
+    // 💡 ফাইল অ্যারে পুশ (মেইন ইমেজ ১টি + অতিরিক্ত ৩টি = মোট ৪টি ছবি Multer এ যাবে)
     if (singleImage) formData.append("commonImages", singleImage);
-    multiImages.forEach((file) => formData.append("commonImages", file));
+    multiImages.slice(0, 3).forEach((file) => formData.append("commonImages", file));
+
+    // শেড ইমেজগুলো Multer-এর 'shadeImages' ফিল্ডে যাবে
+    if (isMakeupSelected) {
+      shades.forEach((sh) => {
+        if (sh.shadeFile) {
+          formData.append("shadeImages", sh.shadeFile);
+        }
+      });
+    }
 
     try {
-      // এখানে আপনার প্রোডাকশন API এন্ডপয়েন্টটি বসিয়ে দিন
-      await axios.post(`${process.env.NEXT_PUBLIC_BASE_URL}/products`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      router.push("/admin/products");
+      await createProduct(formData);
+      alert("Product saved successfully!");
+      router.push("/products");
     } catch (error) {
-      console.error(error);
-      alert("Failed to save product.");
+      console.error("Submit Error:", error);
+      alert("Failed to save product. Check backend logs.");
     } finally {
       setIsCreatingProduct(false);
     }
@@ -182,315 +241,280 @@ export default function AddProductPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-8 font-sans text-slate-800 antialiased">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen p-8 bg-[#FAFAFA] text-slate-800 antialiased text-xs">
+      <div className="">
         
-        {/* HEADER SECTION */}
         <div className="mb-8">
-          <h1 className="text-[26px] font-bold text-[#1E293B]">Add Product</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Fill in product details, pricing, images, and descriptions. Preview updates live on the right.
-          </p>
+          <h1 className="text-2xl font-bold text-[#1E293B] font-serif">Add New Product</h1>
+          <p className="text-slate-400 mt-1">Fill out specifications, categories, and dynamic product variants/shades below.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           
-          {/* LEFT CONTAINER (Image 18-6-26 at 12.39 PM.png) */}
           <div className="lg:col-span-2 flex flex-col gap-6">
             
-            {/* BASIC INFORMATION CARD */}
-            <div className="bg-white p-6 rounded-xl border border-slate-200/70 shadow-sm">
-              <h2 className="text-base font-bold text-[#1E293B] mb-5">Basic Information</h2>
+            {/* BASIC INFORMATION */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+              <h2 className="text-sm font-bold text-[#1E293B]">Basic Information</h2>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-2">Product Name <span className="text-slate-400 font-normal">(Max 120 characters.)</span></label>
+                  <label className="font-semibold text-slate-500 block mb-1.5">Product Code / SKU *</label>
                   <input
                     type="text"
+                    required
+                    value={productCode}
+                    onChange={(e) => setProductCode(e.target.value)}
+                    placeholder="e.g., PROD-MK-102"
+                    className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-orange-400 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-500 block mb-1.5">Product Name *</label>
+                  <input
+                    type="text"
+                    required
                     value={productName}
                     onChange={(e) => setProductName(e.target.value)}
-                    placeholder="Polo Shirt"
-                    className="w-full text-sm border border-slate-200 rounded-lg p-3 outline-none focus:border-orange-400 bg-white placeholder-slate-300 transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-2">SKU <span className="text-slate-400 font-normal">(optional)</span></label>
-                  <input
-                    type="text"
-                    value={sku}
-                    onChange={(e) => setSku(e.target.value)}
-                    placeholder="SKU-001"
-                    className="w-full text-sm border border-slate-200 rounded-lg p-3 outline-none focus:border-orange-400 bg-white placeholder-slate-300 transition-colors"
+                    placeholder="e.g., Matte Perfect Foundation"
+                    className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-orange-400 bg-white"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-2">Product Type</label>
-                  <select
-                    value={productType}
-                    onChange={(e) => setProductType(e.target.value)}
-                    className="w-full text-sm border border-slate-200 rounded-lg p-3 bg-white outline-none focus:border-orange-400 text-slate-700"
-                  >
-                    <option value="Single">Single</option>
-                    <option value="Variant">Variant</option>
+                  <label className="font-semibold text-slate-500 block mb-1.5">Skin Type</label>
+                  <select value={skinType} onChange={(e) => setSkinType(e.target.value)} className="w-full border border-slate-200 rounded-xl p-2.5 bg-white">
+                    <option value="All">All Skin Types</option>
+                    <option value="Oily">Oily</option>
+                    <option value="Dry">Dry</option>
+                    <option value="Sensitive">Sensitive</option>
+                    <option value="Normal">Normal</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-2">Brand <span className="text-slate-400 font-normal">(optional)</span></label>
-                  <select
-                    value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    className="w-full text-sm border border-slate-200 rounded-lg p-3 bg-white text-slate-400 outline-none focus:border-orange-400"
-                  >
-                    <option value="">Select brand</option>
-                    <option value="Sreyoshi">Sreyoshi</option>
+                  <label className="font-semibold text-slate-500 block mb-1.5">Promotion / Tag</label>
+                  <select value={promotion} onChange={(e) => setPromotion(e.target.value)} className="w-full border border-slate-200 rounded-xl p-2.5 bg-white">
+                    <option value="None">None</option>
+                    <option value="New Arrivals">New Arrivals</option>
+                    <option value="Best Sellers">Best Sellers</option>
+                    <option value="Trending">Trending</option>
                   </select>
                 </div>
               </div>
 
-              {/* SINGLE PRODUCT DETAILS CONTAINER BOX */}
-              <div className="bg-[#F8FAFC] border border-slate-200/60 rounded-xl p-6">
-                <h3 className="text-xs font-bold text-slate-700 tracking-wide mb-5">Single Product Details</h3>
+              {/* PRICING & SPECIFICATIONS */}
+              <div className="bg-[#F8FAFC] border border-slate-100 rounded-xl p-4 space-y-4">
+                <h3 className="font-bold text-slate-700 tracking-wide">Pricing & Volume Spec</h3>
                 
-                <div className="space-y-4">
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    <label className="text-xs font-semibold text-slate-600 md:w-32 shrink-0">Purchase Price</label>
-                    <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">৳</span>
-                      <input
-                        type="number"
-                        value={purchasePrice}
-                        onChange={(e) => setPurchasePrice(e.target.value !== "" ? Number(e.target.value) : "")}
-                        placeholder="500"
-                        className="w-full max-w-sm text-sm border border-slate-200 rounded-lg py-2.5 pl-7 pr-3 bg-white outline-none focus:border-orange-400"
-                      />
-                    </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="font-semibold text-slate-600 block mb-1">Price (৳) *</label>
+                    <input type="number" required value={sellPrice} onChange={(e) => setSellPrice(e.target.value !== "" ? Number(e.target.value) : "")} placeholder="1250" className="w-full border border-slate-200 rounded-lg p-2 bg-white outline-none" />
                   </div>
-
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    <label className="text-xs font-semibold text-slate-600 md:w-32 shrink-0">Sell Price</label>
-                    <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">৳</span>
-                      <input
-                        type="number"
-                        value={sellPrice}
-                        onChange={(e) => setSellPrice(e.target.value !== "" ? Number(e.target.value) : "")}
-                        placeholder="650"
-                        className="w-full max-w-sm text-sm border border-slate-200 rounded-lg py-2.5 pl-7 pr-3 bg-white outline-none focus:border-orange-400"
-                      />
-                    </div>
+                  <div>
+                    <label className="font-semibold text-slate-600 block mb-1">Old Price (৳)</label>
+                    <input type="number" value={regularPrice} onChange={(e) => setRegularPrice(e.target.value !== "" ? Number(e.target.value) : "")} placeholder="1500" className="w-full border border-slate-200 rounded-lg p-2 bg-white outline-none" />
                   </div>
-
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    <label className="text-xs font-semibold text-slate-600 md:w-32 shrink-0">Regular Price <span className="text-slate-400 font-normal">(optional)</span></label>
-                    <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">৳</span>
-                      <input
-                        type="number"
-                        value={regularPrice}
-                        onChange={(e) => setRegularPrice(e.target.value !== "" ? Number(e.target.value) : "")}
-                        placeholder="800"
-                        className="w-full max-w-sm text-sm border border-slate-200 rounded-lg py-2.5 pl-7 pr-3 bg-white outline-none focus:border-orange-400"
-                      />
-                    </div>
+                  <div>
+                    <label className="font-semibold text-slate-600 block mb-1">Weight/Vol</label>
+                    <input type="number" value={weightOrVolume} onChange={(e) => setWeightOrVolume(e.target.value !== "" ? Number(e.target.value) : "")} className="w-full border border-slate-200 rounded-lg p-2 bg-white outline-none" />
                   </div>
-
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    <label className="text-xs font-semibold text-slate-600 md:w-32 shrink-0">Stock</label>
-                    <input
-                      type="number"
-                      value={stock}
-                      onChange={(e) => setStock(e.target.value !== "" ? Number(e.target.value) : "")}
-                      placeholder="600"
-                      className="w-full max-w-sm text-sm border border-slate-200 rounded-lg p-2.5 bg-white outline-none focus:border-orange-400"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between max-w-sm pt-2">
-                    <span className="text-xs font-semibold text-slate-600">Stock Out</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-slate-400 font-medium">{stockOut ? "Active" : "Inactive"}</span>
-                      <button
-                        type="button"
-                        onClick={() => setStockOut(!stockOut)}
-                        className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors duration-300 ${stockOut ? "bg-amber-500" : "bg-slate-200"}`}
-                      >
-                        <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform duration-300 ${stockOut ? "translate-x-5" : ""}`} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between max-w-sm pt-2">
-                    <span className="text-xs font-semibold text-slate-600">Product Status</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-slate-400 font-medium">{productStatus}</span>
-                      <button
-                        type="button"
-                        onClick={() => setProductStatus(productStatus === "Active" ? "Inactive" : "Active")}
-                        className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors duration-300 ${productStatus === "Active" ? "bg-orange-500" : "bg-slate-200"}`}
-                      >
-                        <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform duration-300 ${productStatus === "Active" ? "translate-x-5" : ""}`} />
-                      </button>
-                    </div>
+                  <div>
+                    <label className="font-semibold text-slate-600 block mb-1">Unit</label>
+                    <select value={unit} onChange={(e) => setUnit(e.target.value as any)} className="w-full border border-slate-200 rounded-lg p-2 bg-white outline-none">
+                      <option value="ml">ml</option>
+                      <option value="gm">gm</option>
+                      <option value="pcs">pcs</option>
+                    </select>
                   </div>
                 </div>
 
-              </div>
-            </div>
-
-            {/* CATEGORY SELECTION CARD (ব্যাকএন্ড ডেটা কানেক্টেড) */}
-            <div className="bg-white p-6 rounded-xl border border-slate-200/70 shadow-sm">
-              <h2 className="text-base font-bold text-[#1E293B] mb-5">Category</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-2">Category</label>
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => {
-                      setSelectedCategory(e.target.value);
-                      setSelectedSubCategory("");
-                    }}
-                    className="w-full text-sm border border-slate-200 rounded-lg p-3 bg-white text-slate-700 outline-none focus:border-orange-400"
+                <div className="flex items-center justify-between max-w-xs pt-2">
+                  <span className="font-semibold text-slate-600">Product Status</span>
+                  <button
+                    type="button"
+                    onClick={() => setProductStatus(productStatus === "Active" ? "Inactive" : "Active")}
+                    className={`w-10 h-5 flex items-center rounded-full p-0.5 transition-colors ${productStatus === "Active" ? "bg-orange-500" : "bg-slate-200"}`}
                   >
-                    <option value="">Select category</option>
-                    {categories?.map((cat: ICategory) => (
-                      <option key={cat._id} value={cat._id}>{cat.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 block mb-2">Sub Category <span className="text-slate-400 font-normal">(optional)</span></label>
-                  <select
-                    value={selectedSubCategory}
-                    onChange={(e) => setSelectedSubCategory(e.target.value)}
-                    disabled={!selectedCategory}
-                    className="w-full text-sm border border-slate-200 rounded-lg p-3 bg-white text-slate-700 outline-none focus:border-orange-400 disabled:bg-slate-50 disabled:text-slate-400"
-                  >
-                    <option value="">{selectedCategory ? "Select sub category" : "Select category first"}</option>
-                    {availableSubCategoryItems.map((name, idx) => (
-                      <option key={idx} value={name}>{name}</option>
-                    ))}
-                  </select>
+                    <div className={`bg-white w-4 h-4 rounded-full shadow transform transition ${productStatus === "Active" ? "translate-x-5" : ""}`} />
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* RELATED PRODUCTS CARD (Image 18-6-26 at 12.40 PM.png) */}
-            <div className="bg-white p-6 rounded-xl border border-slate-200/70 shadow-sm">
-              <h2 className="text-base font-bold text-[#1E293B] mb-1">Related Products</h2>
-              <p className="text-xs text-slate-400 mb-4">Select which related products you want to show on the product page.</p>
-              
-              <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4" />
-                <input
-                  type="text"
-                  value={relatedProductQuery}
-                  onChange={(e) => setRelatedProductQuery(e.target.value)}
-                  placeholder="Search Product..."
-                  className="w-full text-sm border border-slate-200 rounded-lg py-2.5 pl-9 pr-4 outline-none focus:border-orange-400"
-                />
-              </div>
-
-              <div className="border border-slate-200 rounded-xl p-4 flex flex-col gap-3 max-h-48 overflow-y-auto bg-slate-50/30">
-                {filteredRelatedProducts.map((prod) => (
-                  <label key={prod._id} className="flex items-center gap-3 cursor-pointer text-sm text-slate-600 font-medium hover:text-black transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={selectedRelatedProducts.includes(prod._id)}
-                      onChange={() => toggleRelatedProduct(prod._id)}
-                      className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-0 accent-slate-800"
-                    />
-                    {prod.name}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* DESCRIPTION CARD */}
-            <div className="bg-white p-6 rounded-xl border border-slate-200/70 shadow-sm">
-              <h2 className="text-base font-bold text-[#1E293B] mb-5">Description</h2>
-              
-              <div className="mb-5">
-                <label className="text-xs font-semibold text-slate-500 block mb-1">Short Description <span className="text-slate-400 font-normal">(optional)</span></label>
-                <p className="text-[11px] text-slate-400 mb-2">Just 1 line summary</p>
-                <input
-                  type="text"
-                  value={shortDescription}
-                  onChange={(e) => setShortDescription(e.target.value)}
-                  placeholder="Premium cotton polo shirt for everyday wear"
-                  className="w-full text-sm border border-slate-200 rounded-lg p-3 outline-none focus:border-orange-400 bg-white placeholder-slate-300"
-                />
-              </div>
-
+            {/* CATEGORY & SUB CATEGORY */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-semibold text-slate-500 block mb-3">Long Description</label>
-                
-                <div className="border border-slate-200 border-b-0 rounded-t-lg bg-[#F8FAFC] p-2 flex flex-wrap gap-1.5 items-center">
-                  {["B", "I", "U", "S", "H2", "H3", "”", "List-Bullet", "List-Num", "Align-L", "Align-C", "Align-R", "Link"].map((btn, idx) => (
-                    <button key={idx} type="button" className="text-xs font-bold px-2.5 py-1 bg-white border border-slate-200 rounded shadow-sm text-slate-500 hover:bg-slate-50">{btn}</button>
+                <label className="font-semibold text-slate-500 block mb-1.5">Category *</label>
+                <select
+                  required
+                  value={selectedCategory}
+                  onChange={(e) => { setSelectedCategory(e.target.value); setSelectedSubCategory(""); setShades([]); }}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 bg-white outline-none"
+                >
+                  <option value="">Select category</option>
+                  {categories?.map((cat: ICategory) => (
+                    <option key={cat._id} value={cat._id}>{cat.name}</option>
                   ))}
-                  <button type="button" onClick={() => setLongDescription("")} className="text-xs font-semibold px-2.5 py-1 bg-white border border-slate-200 rounded shadow-sm text-red-500 hover:bg-red-50 ml-auto">Clear</button>
-                </div>
-                
-                <textarea
-                  value={longDescription}
-                  onChange={(e) => setLongDescription(e.target.value)}
-                  placeholder="Write detailed product description..."
-                  rows={6}
-                  className="w-full text-sm border border-slate-200 rounded-b-lg p-4 outline-none focus:border-orange-400 bg-white resize-none placeholder-slate-300"
-                />
-                <div className="text-[11px] text-slate-400 text-right mt-1.5">Rich text editor <span className="float-right">{longDescription.length} characters</span></div>
+                </select>
+              </div>
+              <div>
+                <label className="font-semibold text-slate-500 block mb-1.5">Sub Category</label>
+                <select
+                  value={selectedSubCategory}
+                  onChange={(e) => setSelectedSubCategory(e.target.value)}
+                  disabled={!selectedCategory}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 bg-white disabled:bg-slate-50 outline-none"
+                >
+                  <option value="">Select sub category</option>
+                  {availableSubCategoryItems.map((name, idx) => (
+                    <option key={idx} value={name}>{name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            {/* PRODUCT IMAGES CARD */}
-            <div className="bg-white p-6 rounded-xl border border-slate-200/70 shadow-sm">
-              <h2 className="text-base font-bold text-[#1E293B] mb-1">Product Images</h2>
-              <p className="text-xs text-slate-400 mb-5">Select or upload up to 4 images.</p>
+            {/* SHADES SETUP (CONDITIONAL) */}
+            {isMakeupSelected && (
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4 transition-all duration-300">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div>
+                    <h2 className="text-sm font-bold text-[#1E293B]">Product Shades Setup</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addShadeField}
+                    className="flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white font-bold px-3 py-1.5 rounded-xl shadow-sm transition-all"
+                  >
+                    <Plus size={14} /> Add Shade
+                  </button>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {shades.length === 0 ? (
+                  <p className="text-center py-6 text-slate-400 italic">No shades added yet.</p>
+                ) : (
+                  <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+                    {shades.map((shade, idx) => (
+                      <div key={idx} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 relative group">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 w-full">
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-semibold block mb-1">Shade Name</label>
+                            <input type="text" required placeholder="e.g., NC15" value={shade.shadeName} onChange={(e) => handleShadeChange(idx, "shadeName", e.target.value)} className="w-full p-2 border rounded-lg bg-white outline-none" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-semibold block mb-1">Color Picker</label>
+                            <div className="flex items-center gap-2 border rounded-lg bg-white p-1">
+                              <input type="color" value={shade.shadeColorCode} onChange={(e) => handleShadeChange(idx, "shadeColorCode", e.target.value)} className="w-8 h-7 border-0 cursor-pointer p-0" />
+                              <span className="text-[11px] font-mono">{shade.shadeColorCode}</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-semibold block mb-1">Stock</label>
+                            <input type="number" required placeholder="50" value={shade.stock} onChange={(e) => handleShadeChange(idx, "stock", e.target.value !== "" ? Number(e.target.value) : "")} className="w-full p-2 border rounded-lg bg-white outline-none" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-400 font-semibold block mb-1">Shade Image</label>
+                            <div className="border rounded-lg bg-white p-1 flex items-center gap-2 max-h-[38px]">
+                              {shade.shadePreview ? (
+                                <div className="relative w-8 h-7 border rounded bg-slate-50 flex items-center justify-center overflow-hidden">
+                                  <img src={shade.shadePreview} alt="shade" className="w-full h-full object-cover" />
+                                  <button type="button" onClick={() => { handleShadeChange(idx, "shadeFile", null); handleShadeChange(idx, "shadePreview", ""); }} className="absolute inset-0 bg-black/40 flex items-center justify-center text-white"><X size={10} /></button>
+                                </div>
+                              ) : (
+                                <label className="cursor-pointer flex items-center gap-1.5 text-slate-500 hover:text-slate-800 p-1">
+                                  <Upload size={12} className="text-orange-400" />
+                                  <span className="text-[10px] font-medium">Upload File</span>
+                                  <input type="file" accept="image/*" onChange={(e) => handleShadeImageChange(idx, e)} className="hidden" />
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => removeShadeField(idx)} className="text-slate-400 hover:text-red-500 p-1 md:mt-4 transition-colors">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* DESCRIPTIONS & USAGE */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+              <h2 className="text-sm font-bold text-[#1E293B]">Descriptions & Usage</h2>
+              
+              <div className="space-y-2">
+                <label className="font-semibold text-slate-500 block mb-1">Product Description *</label>
+                <div className="prose-editor bg-white rounded-xl overflow-hidden border border-slate-200">
+                  <DynamicReactQuill 
+                    theme="snow" 
+                    value={description} 
+                    onChange={setDescription} 
+                    modules={editorModules}
+                    placeholder="Write detailed product specifications..."
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="font-semibold text-slate-500 block mb-1">How To Use</label>
+                <div className="prose-editor bg-white rounded-xl overflow-hidden border border-slate-200">
+                  <DynamicReactQuill 
+                    theme="snow" 
+                    value={howToUse} 
+                    onChange={setHowToUse} 
+                    modules={editorModules}
+                    placeholder="Step-by-step application guide..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* MEDIA FILES BOX */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+              <h2 className="text-sm font-bold text-[#1E293B]">Product Media Files</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
-                {/* SINGLE IMAGE */}
-                <div className="border border-dashed border-slate-200 rounded-xl p-5 bg-[#F8FAFC] flex flex-col items-center justify-center min-h-[160px] relative transition-colors hover:bg-slate-50">
+                {/* Main Image */}
+                <div className="border border-dashed border-slate-200 rounded-xl p-4 bg-[#F8FAFC] flex flex-col items-center justify-center min-h-[140px] relative">
                   {singleImagePreview ? (
-                    <div className="relative w-full h-full min-h-[120px] flex items-center justify-center">
-                      <img src={singleImagePreview} alt="Preview" className="max-h-[120px] object-contain rounded-lg" />
-                      <button type="button" onClick={() => { setSingleImage(null); setSingleImagePreview(null); }} className="absolute top-0 right-0 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 shadow"><X size={12} /></button>
+                    <div className="relative h-24 flex items-center justify-center">
+                      <img src={singleImagePreview} className="max-h-full object-contain rounded-lg" />
+                      <button type="button" onClick={() => { setSingleImage(null); setSingleImagePreview(null); }} className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full"><X size={10} /></button>
                     </div>
                   ) : (
-                    <label className="cursor-pointer flex flex-col items-center text-center">
-                      <Upload className="w-7 h-7 text-orange-400 mb-2" />
-                      <span className="text-xs font-bold text-slate-700">Single Image</span>
-                      <span className="text-[10px] text-slate-400 mt-0.5">Main product image</span>
+                    <label className="cursor-pointer text-center">
+                      <Upload className="w-6 h-6 text-orange-400 mx-auto mb-1" />
+                      <span className="font-bold text-slate-700 block">Main Image</span>
                       <input type="file" accept="image/*" onChange={handleSingleImageChange} className="hidden" />
                     </label>
                   )}
                 </div>
 
-                {/* MULTI IMAGES */}
-                <div className="border border-dashed border-slate-200 rounded-xl p-5 bg-[#F8FAFC] flex flex-col items-center justify-center min-h-[160px] transition-colors hover:bg-slate-50">
+                {/* Additional Multi Images */}
+                <div className="border border-dashed border-slate-200 rounded-xl p-4 bg-[#F8FAFC] flex flex-col items-center justify-center min-h-[140px]">
                   {multiImagePreviews.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-2.5 w-full">
+                    <div className="grid grid-cols-2 gap-2 w-full">
                       {multiImagePreviews.map((src, idx) => (
-                        <div key={idx} className="relative bg-white border border-slate-200 p-1 rounded-lg flex items-center justify-center h-14 shadow-sm">
-                          <img src={src} alt="Preview" className="max-h-full object-contain" />
-                          <button type="button" onClick={() => removeMultiImage(idx)} className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-600"><X size={8} /></button>
+                        <div key={idx} className="relative bg-white border border-slate-200 p-1 rounded-lg flex items-center justify-center h-11">
+                          <img src={src} className="max-h-full object-contain" />
+                          <button type="button" onClick={() => removeMultiImage(idx)} className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full"><X size={8} /></button>
                         </div>
                       ))}
-                      {multiImagePreviews.length < 4 && (
-                        <label className="border border-dashed border-slate-200 rounded-lg flex items-center justify-center h-14 cursor-pointer bg-white text-slate-400 hover:text-slate-600">
-                          <Upload className="w-4 h-4" />
+                      {multiImagePreviews.length < 3 && (
+                        <label className="border border-dashed border-slate-200 rounded-lg flex items-center justify-center h-11 cursor-pointer bg-white">
+                          <Plus size={14} />
                           <input type="file" accept="image/*" multiple onChange={handleMultiImageChange} className="hidden" />
                         </label>
                       )}
                     </div>
                   ) : (
-                    <label className="cursor-pointer flex flex-col items-center text-center">
-                      <Upload className="w-7 h-7 text-orange-400 mb-2" />
-                      <span className="text-xs font-bold text-slate-700">Multi Images</span>
-                      <span className="text-[10px] text-slate-400 mt-0.5">Up to 4 additional images</span>
+                    <label className="cursor-pointer text-center">
+                      <Upload className="w-6 h-6 text-orange-400 mx-auto mb-1" />
+                      <span className="font-bold text-slate-700 block">Gallery Images (Max 3)</span>
                       <input type="file" accept="image/*" multiple onChange={handleMultiImageChange} className="hidden" />
                     </label>
                   )}
@@ -499,20 +523,10 @@ export default function AddProductPage() {
               </div>
             </div>
 
-            {/* BUTTON GROUP */}
-            <div className="flex justify-end gap-3.5 mt-2">
-              <button
-                type="button"
-                onClick={() => router.back()}
-                className="px-5 py-2.5 rounded-lg border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 bg-white transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isCreatingProduct}
-                className="px-6 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg shadow-sm hover:bg-black transition-colors flex items-center gap-2 disabled:bg-slate-400"
-              >
+            {/* BUTTONS */}
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => router.back()} className="px-5 py-2 rounded-xl border bg-white font-medium hover:bg-slate-50">Cancel</button>
+              <button type="submit" disabled={isCreatingProduct} className="px-6 py-2 bg-slate-900 hover:bg-black text-white font-medium rounded-xl flex items-center gap-2 disabled:bg-slate-400">
                 {isCreatingProduct && <Loader2 className="w-4 h-4 animate-spin" />}
                 Save Product
               </button>
@@ -520,38 +534,22 @@ export default function AddProductPage() {
 
           </div>
 
-          {/* RIGHT SIDEBAR PREVIEW CONTAINER */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/70 shadow-sm sticky top-6">
-            <h3 className="text-sm font-bold text-[#1E293B] mb-0.5">Preview</h3>
-            <p className="text-[11px] text-slate-400 mb-5">Live product snapshot</p>
-
-            <div className="border border-slate-200/60 rounded-xl p-4 bg-white flex gap-4 items-start">
-              <div className="w-20 h-20 bg-[#F1F5F9] rounded-lg flex items-center justify-center text-center overflow-hidden shrink-0 border border-slate-100">
-                {singleImagePreview ? (
-                  <img src={singleImagePreview} alt="Preview" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-[10px] font-medium text-slate-400 p-2">No image</span>
-                )}
+          {/* LIVE PREVIEW */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm sticky top-6 space-y-4">
+            <h3 className="text-xs font-bold text-[#1E293B] uppercase tracking-wider">Live Preview</h3>
+            <div className="border border-slate-100 rounded-xl p-4 bg-white flex gap-4 items-start">
+              <div className="w-16 h-16 bg-[#F1F5F9] rounded-lg flex items-center justify-center overflow-hidden shrink-0 border">
+                {singleImagePreview ? <img src={singleImagePreview} className="w-full h-full object-cover" /> : <span className="text-[9px] text-slate-400">No Img</span>}
               </div>
-
-              <div className="flex flex-col min-w-0 flex-1">
-                <h4 className="text-sm font-bold text-slate-800 truncate">{productName || "Product name"}</h4>
-                <span className="text-xs text-slate-400 font-medium block mt-0.5">
-                  {categories?.find((c: any) => c._id === selectedCategory)?.name || "Category"}
-                </span>
-                <span className="text-[11px] text-slate-400 font-medium block">Brand</span>
-                
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-slate-800 truncate text-sm">{productName || "Product Title"}</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5 font-mono">{productCode || "Code: —"}</p>
                 <div className="h-[2px] w-4 bg-orange-400 my-2 rounded" />
-                
-                <div className="grid grid-cols-2 gap-y-1 text-xs text-slate-500 font-medium">
-                  <div>Purchase</div>
-                  <div className="text-slate-800 text-right">{purchasePrice ? `৳ ${purchasePrice}` : "—"}</div>
-                  <div>Regular</div>
-                  <div className="text-slate-800 text-right">{regularPrice ? `৳ ${regularPrice}` : "—"}</div>
-                  <div>Stock</div>
-                  <div className="text-slate-800 text-right">{stock || "0"}</div>
-                  <div>Status</div>
-                  <div className="text-right font-bold text-slate-700 capitalize">{productStatus.toLowerCase()}</div>
+                <div className="grid grid-cols-2 gap-y-1 text-slate-500 font-medium text-[11px]">
+                  <div>Price:</div>
+                  <div className="text-slate-900 text-right font-bold">{sellPrice ? `৳ ${sellPrice}` : "—"}</div>
+                  <div>Old Price:</div>
+                  <div className="text-slate-500 text-right line-through">{regularPrice ? `৳ ${regularPrice}` : "—"}</div>
                 </div>
               </div>
             </div>

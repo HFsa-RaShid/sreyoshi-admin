@@ -13,7 +13,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* ডানপাশের ডাইনামিক পেজ কন্টেন্ট এরিয়া */}
       <main className="flex-1 pl-64 min-h-screen">
-        <div className="p-8 md:p-12 max-w-7xl mx-auto">
+        <div className="p-8 md:p-12">
           {children}
         </div>
       </main>
