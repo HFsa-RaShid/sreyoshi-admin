@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { signIn, useSession } from "next-auth/react"; // ⚡ NextAuth মেথডগুলো ইম্পোর্ট করা হলো
+import { signIn, useSession } from "next-auth/react"; 
 import { Lock, Mail, Loader2 } from "lucide-react";
 
 export default function AdminLoginPage() {
@@ -13,7 +13,6 @@ export default function AdminLoginPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
-  // ⚡ অলরেডি লগইনড বা সেশন থাকলে অটোমেটিক ড্যাশবোর্ডে পাঠিয়ে দেবে
   useEffect(() => {
     if (status === "authenticated") {
       router.push("/dashboard");

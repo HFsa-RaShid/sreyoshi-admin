@@ -1,7 +1,7 @@
 export interface IProductShade {
   shadeName: string;
   shadeColorCode?: string;
-  shadeImage: string;
+  shadeImages: string;
   stock: number;
   status: 'Active' | 'Inactive';
 }

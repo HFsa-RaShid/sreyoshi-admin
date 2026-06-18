@@ -235,7 +235,7 @@ export default function CategoryPage() {
   if (isLoading) return <div className="p-8 text-center text-base font-medium text-gray-500">Loading Categories...</div>;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6 bg-[#f8fafc] min-h-screen">
+    <div className="p-6 w-full space-y-6 bg-[#f8fafc] min-h-screen">
       
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -326,7 +326,7 @@ export default function CategoryPage() {
                           </div>
                           
                           <div className="flex items-center gap-4">
-                            <span className="text-xs text-gray-400 font-semibold">{sub.items?.length || 0} products</span>
+                            <span className="text-xs text-gray-400 font-semibold">{sub.items?.length || 0} Items</span>
                             
                             <div className="flex items-center gap-1">
                               <button onClick={() => handleToggleSubStatus(cat, sIdx)} className="p-2 text-gray-400 hover:text-purple-600 rounded-md" title="Toggle Subcategory Visibility">
