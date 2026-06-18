@@ -14,6 +14,7 @@ export default function Sidebar() {
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
     { name: "Categories", href: "/categories", icon: FolderOpen },
     { name: "Shades Config", href: "/shades-config", icon: Layers },
+    { name: "Brands Config", href: "/brands-config", icon: Layers },
     { name: "All Products", href: "/products", icon: ShoppingBag },
     { name: "Add Products", href: "/add-products", icon: ShoppingBag },
     { name: "Customers", href: "/customers", icon: Users },
