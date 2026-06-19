@@ -2,13 +2,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useBrands } from "@/hooks/useBrands"; // আপনার সঠিক হুক পাথ দিন
+import { useBrands } from "@/hooks/useBrands"; 
 import { FiX } from "react-icons/fi";
+import toast from "react-hot-toast";
 
 interface BrandModalProps {
   isOpen: boolean;
   onClose: () => void;
-  brand?: any; // যদি থাকে তবে 'Edit' মোড, না থাকলে 'Add' মোড
+  brand?: any; 
 }
 
 export default function BrandModal({ isOpen, onClose, brand }: BrandModalProps) {
@@ -18,7 +19,6 @@ export default function BrandModal({ isOpen, onClose, brand }: BrandModalProps) 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // এডিট মোড হলে আগের ডাটা ফিল্ডে বসানোর জন্য
   useEffect(() => {
     if (brand) {
       setName(brand.name || "");
@@ -40,23 +40,22 @@ export default function BrandModal({ isOpen, onClose, brand }: BrandModalProps) 
       const formData = new FormData();
       formData.append("name", name);
       formData.append("status", status);
+      
       if (logoFile) {
         formData.append("logo", logoFile);
       }
 
       if (brand) {
-        // Update Mode
         await updateBrand({ id: brand._id, data: formData });
-        alert("Brand updated successfully!");
+        toast.success("Brand updated successfully!");
       } else {
-        // Add Mode
         await addBrand(formData);
-        alert("Brand added successfully!");
+        toast.success("Brand added successfully!");
       }
       onClose();
     } catch (error) {
       console.error(error);
-      alert("Something went wrong!");
+      toast.error("Something went wrong!");
     } finally {
       setIsSubmitting(false);
     }
@@ -91,7 +90,11 @@ export default function BrandModal({ isOpen, onClose, brand }: BrandModalProps) 
             <input
               type="file"
               accept="image/*"
-              onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  setLogoFile(e.target.files[0]);
+                }
+              }}
               className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
             />
           </div>

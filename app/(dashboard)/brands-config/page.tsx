@@ -6,6 +6,7 @@ import { useBrands } from "@/hooks/useBrands";
 import { FiTrash2, FiEdit2, FiSearch, FiPlus } from "react-icons/fi";
 import Image from "next/image";
 import BrandModal from "./BrandModal";
+import toast from "react-hot-toast";
 
 
 export default function BrandsPage() {
@@ -21,10 +22,10 @@ export default function BrandsPage() {
     if (window.confirm("Are you sure you want to delete this brand?")) {
       try {
         await deleteBrand(id);
-        alert("Brand deleted successfully!");
+        toast.success("Brand deleted successfully!");
       } catch (error) {
         console.error(error);
-        alert("Failed to delete brand");
+        toast.error("Failed to delete brand");
       }
     }
   };
@@ -79,7 +80,7 @@ export default function BrandsPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50/70 border-b border-gray-100 text-[10px] font-bold uppercase text-gray-400 tracking-wider">
-                
+                <th className='p-4 text-center'>Brand Logo</th>
                 <th className="p-4">Brand Name</th>
                 <th className="p-4">Slug</th>
                 <th className="p-4">Status</th>
@@ -94,14 +95,14 @@ export default function BrandsPage() {
               ) : (
                 filteredBrands.map((brand: any) => (
                   <tr key={brand._id} className="hover:bg-gray-50/40 transition-colors">
-                    {/* <td className="p-4 text-center">
+                     <td className="p-4 text-center">
                       <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-gray-100 bg-gray-50 mx-auto">
                         <Image 
                           src={brand.logo} 
                           alt={brand.name} fill className="object-cover"
                         />
                       </div>
-                    </td> */}
+                    </td> 
                     <td className="p-4">
                       <div className="font-bold text-gray-800 text-sm">{brand.name}</div>
                     </td>
