@@ -1,5 +1,3 @@
-
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -8,6 +6,7 @@ import { Loader2, Upload, X, Plus, Trash2 } from "lucide-react";
 import { ICategory, ISubCategoryItem } from "@/types/category.interface";
 import { useCategories } from "@/hooks/useCategories";
 import { useProducts } from "@/hooks/useProducts"; 
+import { useBrands } from "@/hooks/useBrands"; // 💡 ব্র্যান্ডস হুক ইম্পোর্ট করা হলো
 
 interface IShadeState {
   shadeName: string;
@@ -29,13 +28,16 @@ interface EditProductModalProps {
 export default function EditProductModal({ isOpen, onClose, product, onSuccess }: EditProductModalProps) {
   const { categories, isLoading: isCategoriesLoading } = useCategories();
   
-  // 💡 আপনার কাস্টম হুক থেকে মেথড এবং লোডিং স্টেট নিয়ে আসা হলো
+  // 💡 useBrands হুক থেকে ডাইনামিক ব্র্যান্ড লিস্ট এবং লোডিং স্টেট নিয়ে আসা হলো
+  const { brands, isLoading: isBrandsLoading } = useBrands();
+  
+  // 💡 আপনার কাস্টম হুক থেকে মেথড এবং লোডিং স্টেট নিয়ে আসা হলো
   const { updateProduct, isSaving } = useProducts(product?.productCode);
 
   // --- FORM STATES ---
   const [productCode, setProductCode] = useState("");
   const [productName, setProductName] = useState("");
-  const [brand, setBrand] = useState("");
+  const [brand, setBrand] = useState(""); // এখানে সিলেক্টেড ব্র্যান্ডের ID থাকবে
   const [skinType, setSkinType] = useState("All");
   const [promotion, setPromotion] = useState("None");
   
@@ -65,7 +67,10 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
     if (isOpen && product) {
       setProductCode(product.productCode || "");
       setProductName(product.name || "");
-      setBrand(product.brand || "");
+      
+      // অবজেক্ট বা স্ট্রিং যেকোনো ফরমেটেই আসুক, ব্র্যান্ড আইডি সেট করা হচ্ছে
+      setBrand(typeof product.brand === 'object' ? product.brand?._id : product.brand || "");
+      
       setSkinType(product.skinType || "All");
       setPromotion(product.promotion || "None");
       setSellPrice(product.price || "");
@@ -206,6 +211,7 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
 
     const productPayload: any = {
       name: productName,
+      brand: brand || undefined, // 💡 ব্র্যান্ড আইডি যুক্ত করা হলো
       category: selectedCategory,
       subCategory: subCategoryGroupTitle,
       itemName: selectedSubCategory,
@@ -273,7 +279,7 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
           </button>
         </div>
 
-        {isCategoriesLoading ? (
+        {isCategoriesLoading || isBrandsLoading ? (
           <div className="p-12 flex justify-center"><Loader2 className="animate-spin text-slate-700" /></div>
         ) : (
           <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start text-xs">
@@ -298,9 +304,14 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="font-semibold text-slate-500 block mb-1">Brand</label>
+                    {/* 💡 ডাইনামিক ব্র্যান্ড সিলেক্টর */}
                     <select value={brand} onChange={(e) => setBrand(e.target.value)} className="w-full border rounded-lg p-2.5 bg-white">
                       <option value="">Select brand</option>
-                      <option value="Sreyoshi">Sreyoshi</option>
+                      {brands?.map((br: any) => (
+                        <option key={br._id} value={br._id}>
+                          {br.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -502,7 +513,6 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
               {/* ACTION BUTTONS */}
               <div className="flex gap-3 justify-end">
                 <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border text-slate-600 bg-white font-bold hover:bg-slate-50 transition-colors">Cancel</button>
-                {/* 💡 isSaving স্টেট ব্যবহার করে বাটন নিষ্ক্রিয় করা হলো এবং স্পিনার লোডার দেওয়া হলো */}
                 <button type="submit" disabled={isSaving} className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white font-bold transition-colors flex items-center justify-center gap-2 disabled:bg-slate-300">
                   {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Update Now
@@ -516,5 +526,3 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
     </div>
   );
 }
-
-

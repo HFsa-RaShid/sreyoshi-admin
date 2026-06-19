@@ -1,4 +1,3 @@
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -8,6 +7,7 @@ import { Loader2, Upload, X, Plus, Trash2 } from "lucide-react";
 import { ICategory, ISubCategoryItem } from "@/types/category.interface";
 import { useCategories } from "@/hooks/useCategories";
 import { useProducts } from "@/hooks/useProducts"; 
+import { useBrands } from "@/hooks/useBrands"; // ব্র্যান্ড হুক ইম্পোর্ট করা হলো
 
 // Rich Text Editor
 import DynamicReactQuill from "react-quill-new";
@@ -34,6 +34,7 @@ const editorModules = {
 export default function AddProductPage() {
   const router = useRouter();
   const { categories, isLoading: isCategoriesLoading } = useCategories();
+  const { brands, isLoadingBrands } = useBrands(); // ব্র্যান্ড ডাটা লোড করা হলো
   const { createProduct } = useProducts(); 
   
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
@@ -50,6 +51,7 @@ export default function AddProductPage() {
   const [unit, setUnit] = useState<"gm" | "ml" | "pcs">("ml"); 
   const [productStatus, setProductStatus] = useState<"Active" | "Inactive">("Active");
 
+  const [selectedBrand, setSelectedBrand] = useState(""); // ব্র্যান্ড স্টেট
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSubCategory, setSelectedSubCategory] = useState("");
 
@@ -74,7 +76,6 @@ export default function AddProductPage() {
     }
   };
 
-  // 💡 গ্যালারি ইমেজ সর্বোচ্চ ৩টি নেওয়া যাবে (মেইন ১টি + গ্যালারি ৩টি = মোট ৪টি ছবি Multer লিমিট)
   const handleMultiImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const filesArray = Array.from(e.target.files);
@@ -154,8 +155,8 @@ export default function AddProductPage() {
     const cleanDescription = description.replace(/<(.|\n)*?>/g, "").trim() === "" ? "" : description;
     const cleanHowToUse = howToUse.replace(/<(.|\n)*?>/g, "").trim() === "" ? "" : howToUse;
 
-    if (!productCode || !productName || !sellPrice || !selectedCategory || !cleanDescription) {
-      alert("Please fill out required fields (SKU, Name, Price, Category, and Description).");
+    if (!productCode || !productName || !sellPrice || !selectedBrand || !selectedCategory || !cleanDescription) {
+      alert("Please fill out required fields (SKU, Name, Price, Brand, Category, and Description).");
       return;
     }
 
@@ -171,11 +172,12 @@ export default function AddProductPage() {
       ? shades.reduce((acc, curr) => acc + Number(curr.stock || 0), 0)
       : 50; 
 
-    // Mongoose Model অনুযায়ী ১০০% সঠিক ডাটা স্ট্রাকচার
+    // Mongoose Model অনুযায়ী ১০০% সঠিক ডাটা স্ট্রাকচার
     const productPayload: any = {
       productCode: productCode,
       name: productName,
       category: selectedCategory,
+      brand: selectedBrand, // পেলোডে ব্র্যান্ড যুক্ত করা হলো
       subCategory: subCategoryGroupTitle, 
       itemName: selectedSubCategory || "General",    
       price: Number(sellPrice),
@@ -206,11 +208,9 @@ export default function AddProductPage() {
 
     formData.append("data", JSON.stringify(productPayload));
 
-    // 💡 ফাইল অ্যারে পুশ (মেইন ইমেজ ১টি + অতিরিক্ত ৩টি = মোট ৪টি ছবি Multer এ যাবে)
     if (singleImage) formData.append("commonImages", singleImage);
     multiImages.slice(0, 3).forEach((file) => formData.append("commonImages", file));
 
-    // শেড ইমেজগুলো Multer-এর 'shadeImages' ফিল্ডে যাবে
     if (isMakeupSelected) {
       shades.forEach((sh) => {
         if (sh.shadeFile) {
@@ -231,7 +231,7 @@ export default function AddProductPage() {
     }
   };
 
-  if (isCategoriesLoading) {
+  if (isCategoriesLoading || isLoadingBrands) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-2 bg-[#F8FAFC]">
         <Loader2 className="w-8 h-8 animate-spin text-slate-700" />
@@ -344,35 +344,52 @@ export default function AddProductPage() {
               </div>
             </div>
 
-            {/* CATEGORY & SUB CATEGORY */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* BRAND, CATEGORY & SUB CATEGORY */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
               <div>
-                <label className="font-semibold text-slate-500 block mb-1.5">Category *</label>
+                <label className="font-semibold text-slate-500 block mb-1.5">Brand *</label>
                 <select
                   required
-                  value={selectedCategory}
-                  onChange={(e) => { setSelectedCategory(e.target.value); setSelectedSubCategory(""); setShades([]); }}
+                  value={selectedBrand}
+                  onChange={(e) => setSelectedBrand(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl p-2.5 bg-white outline-none"
                 >
-                  <option value="">Select category</option>
-                  {categories?.map((cat: ICategory) => (
-                    <option key={cat._id} value={cat._id}>{cat.name}</option>
+                  <option value="">Select brand</option>
+                  {brands?.map((br: any) => (
+                    <option key={br._id} value={br._id}>{br.name}</option>
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="font-semibold text-slate-500 block mb-1.5">Sub Category</label>
-                <select
-                  value={selectedSubCategory}
-                  onChange={(e) => setSelectedSubCategory(e.target.value)}
-                  disabled={!selectedCategory}
-                  className="w-full border border-slate-200 rounded-xl p-2.5 bg-white disabled:bg-slate-50 outline-none"
-                >
-                  <option value="">Select sub category</option>
-                  {availableSubCategoryItems.map((name, idx) => (
-                    <option key={idx} value={name}>{name}</option>
-                  ))}
-                </select>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="font-semibold text-slate-500 block mb-1.5">Category *</label>
+                  <select
+                    required
+                    value={selectedCategory}
+                    onChange={(e) => { setSelectedCategory(e.target.value); setSelectedSubCategory(""); setShades([]); }}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 bg-white outline-none"
+                  >
+                    <option value="">Select category</option>
+                    {categories?.map((cat: ICategory) => (
+                      <option key={cat._id} value={cat._id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-500 block mb-1.5">Sub Category</label>
+                  <select
+                    value={selectedSubCategory}
+                    onChange={(e) => setSelectedSubCategory(e.target.value)}
+                    disabled={!selectedCategory}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 bg-white disabled:bg-slate-50 outline-none"
+                  >
+                    <option value="">Select sub category</option>
+                    {availableSubCategoryItems.map((name, idx) => (
+                      <option key={idx} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 

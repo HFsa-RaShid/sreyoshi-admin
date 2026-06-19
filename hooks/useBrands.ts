@@ -12,7 +12,7 @@ export const brandApi = {
   },
 
   createBrand: async (data: FormData) => {
-    // লোগো ফাইল আপলোড করার জন্য এখানে FormData পাঠানো হবে
+  
     const res = await axios.post(`${API_BASE_URL}`, data, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
