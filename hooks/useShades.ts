@@ -1,41 +1,44 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// src/hooks/useShades.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+import { IShade, IShadePayload } from '@/types/shade.interface';
 
 const API_BASE_URL = `${process.env.NEXT_PUBLIC_BASE_URL}/shades`;
 
-// API Methods
+// API Methods with Strict Types
 export const shadeApi = {
-  getAllShades: async () => {
-    const res = await axios.get(API_BASE_URL);
-    // যদি ব্যাকএন্ড ডাটা রেসপন্স এর .data.data তে পাঠায় (যেমন আপনার ক্যাটাগরি হুকে ছিল)
+  getAllShades: async (itemName?: string): Promise<IShade[]> => {
+    // যদি itemName পাঠানো হয় তবে কুয়েরি প্যারাম হিসেবে যাবে, নতুবা সব আসবে
+    const url = itemName ? `${API_BASE_URL}?itemName=${itemName}` : API_BASE_URL;
+    const res = await axios.get(url);
     return res.data?.data || res.data;
   },
 
-  createShade: async (data: any) => {
+  createShade: async (data: IShadePayload): Promise<IShade> => {
     const res = await axios.post(API_BASE_URL, data);
     return res.data;
   },
 
-  // 👇 এই ফাংশনটি PUT থেকে PATCH এ পরিবর্তন করা হয়েছে
-  updateShade: async ({ id, data }: { id: string; data: any }) => {
-    const res = await axios.patch(`${API_BASE_URL}/${id}`, data); // 👈 FIXED: put -> patch
+  updateShade: async ({ id, data }: { id: string; data: Partial<IShadePayload> }): Promise<IShade> => {
+    const res = await axios.patch(`${API_BASE_URL}/${id}`, data);
     return res.data;
   },
 
-  deleteShade: async (id: string) => {
+  deleteShade: async (id: string): Promise<{ success: boolean; message: string }> => {
     const res = await axios.delete(`${API_BASE_URL}/${id}`);
     return res.data;
   }
 };
 
-// Custom Hook (বাকি অংশ অপরিবর্তিত)
-export const useShades = () => {
+// Custom Hook with Optional Filter
+export const useShades = (itemName?: string) => {
   const queryClient = useQueryClient();
 
-  const { data: shades = [], isLoading, error } = useQuery<any[]>({
-    queryKey: ['shades'],
-    queryFn: shadeApi.getAllShades,
+  // itemName চেঞ্জ হলে রিয়্যাক্ট কুয়েরি অটোমেটিক রি-ফেচ করবে
+  const { data: shades = [], isLoading, error } = useQuery<IShade[]>({
+    queryKey: ['shades', itemName],
+    queryFn: () => shadeApi.getAllShades(itemName),
+    enabled: true, // যদি চান itemName ছাড়া কল হবে না, তবে দিতে পারেন: enabled: !!itemName
   });
 
   const addShadeMutation = useMutation({

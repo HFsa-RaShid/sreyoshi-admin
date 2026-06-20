@@ -1,0 +1,148 @@
+"use client";
+
+import React, { useMemo, useEffect } from "react";
+import { CheckCircle2 } from "lucide-react";
+import { useShades } from "@/hooks/useShades";
+import { IProductShadeState, IShadeItem } from "@/types/shade.interface";
+
+interface ShadesConfigFormProps {
+  selectedSubCategory: string; 
+  shades: IProductShadeState[];
+  setShades: React.Dispatch<React.SetStateAction<IProductShadeState[]>>;
+  onChangeTotalStock: (total: number) => void; // 💡 প্যারেন্ট ফর্মে totalStock আপডেট করার কলব্যাক
+}
+
+export default function ShadesConfigForm({ 
+  selectedSubCategory, 
+  shades, 
+  setShades, 
+  onChangeTotalStock 
+}: ShadesConfigFormProps) {
+  
+  const { shades: dbShadesContext, isLoading } = useShades(selectedSubCategory);
+
+  // ১. এই সাব-ক্যাটাগরি আইটেমের সমস্ত একটিভ শেডের লিস্ট
+  const availableDbShades = useMemo<IShadeItem[]>(() => {
+    if (!selectedSubCategory) return [];
+    const rawData = Array.isArray(dbShadesContext) ? dbShadesContext[0] : dbShadesContext;
+    return (rawData?.availableShades || []).filter((s: IShadeItem) => s.status === "Active");
+  }, [dbShadesContext, selectedSubCategory]);
+
+  // 💡 ২. অটোমেটিক টোটাল স্টক কাউন্ট করে প্যারেন্ট ফর্মে পাঠানো
+  useEffect(() => {
+    const total = shades.reduce((sum, s) => sum + (Number(s.stock) || 0), 0);
+    onChangeTotalStock(total);
+  }, [shades, onChangeTotalStock]);
+
+  // ৩. বাটনে ক্লিক করলে সিলেক্ট/ডিসিলেক্ট হওয়ার লজিক
+  const handleToggleShade = (dbShade: IShadeItem) => {
+    const isAlreadySelected = shades.some(
+      (s) => s.shadeName.trim().toLowerCase() === dbShade.shadeName.trim().toLowerCase()
+    );
+
+    if (isAlreadySelected) {
+      setShades((prev) => prev.filter(
+        (s) => s.shadeName.trim().toLowerCase() !== dbShade.shadeName.trim().toLowerCase()
+      ));
+    } else {
+      setShades((prev) => [
+        ...prev,
+        {
+          shadeName: dbShade.shadeName,
+          shadeColorCode: dbShade.shadeColorCode,
+          shadeFile: null,
+          shadePreview: dbShade.shadeImage || "",
+          stock: "" as const, // শুরুতে স্টক ফাঁকা থাকবে
+          status: "Active" as const
+        }
+      ]);
+    }
+  };
+
+  // ৪. নির্দিষ্ট শেডের স্টক ইনপুট চেঞ্জ হ্যান্ডেলার
+  const handleStockChange = (index: number, value: string) => {
+    const updated = [...shades];
+    updated[index].stock = value !== "" ? Number(value) : "";
+    setShades(updated);
+  };
+
+  if (!selectedSubCategory) {
+    return (
+      <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-200 text-center text-xs text-slate-400 italic">
+        Please select a "Sub Category Item" first to see available shades.
+      </div>
+    );
+  }
+
+  if (isLoading) return <p className="text-center py-4 animate-pulse text-slate-400 text-xs">Loading item shades...</p>;
+
+  return (
+    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-5">
+      <div>
+        <h3 className="text-sm font-bold text-slate-800">Select Item Shades & Enter Stock</h3>
+        <p className="text-xs text-slate-400">Click to select shades and assign quantity for each.</p>
+      </div>
+
+      {/* শেড বাটন প্যানেল */}
+      {availableDbShades.length === 0 ? (
+        <p className="text-xs text-red-400 italic bg-red-50/50 p-3 rounded-xl border border-red-100">
+          No active shades configured for "{selectedSubCategory}" in database.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2.5 max-h-[180px] overflow-y-auto p-1">
+          {availableDbShades.map((dbShade, idx) => {
+            const isSelected = shades.some(
+              (s) => s.shadeName.trim().toLowerCase() === dbShade.shadeName.trim().toLowerCase()
+            );
+
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleToggleShade(dbShade)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all duration-200 select-none ${
+                  isSelected
+                    ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm ring-1 ring-orange-500/30 font-semibold"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+                }`}
+              >
+                <div 
+                  className="w-3.5 h-3.5 rounded-full border border-black/10 flex-shrink-0" 
+                  style={{ backgroundColor: dbShade.shadeColorCode }}
+                />
+                <span>{dbShade.shadeName}</span>
+                {isSelected && <CheckCircle2 size={14} className="text-orange-600 ml-1 flex-shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 💡 সিলেক্টেড শেডগুলোর জন্য স্টক ইনপুট ফিল্ড গ্রিড */}
+      {shades.length > 0 && (
+        <div className="pt-3 border-t border-slate-100 space-y-2">
+          <label className="text-xs font-bold text-slate-700 block">Shades Stock Breakdown</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {shades.map((shade, idx) => (
+              <div key={idx} className="flex items-center justify-between gap-2 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-1.5 min-w-[90px] truncate">
+                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: shade.shadeColorCode }} />
+                  <span className="text-xs font-medium text-slate-700 truncate">{shade.shadeName}</span>
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  placeholder="Qty"
+                  value={shade.stock}
+                  onChange={(e) => handleStockChange(idx, e.target.value)}
+                  className="w-20 p-1 text-center text-xs border rounded-md bg-white focus:outline-none focus:border-orange-500 font-semibold"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

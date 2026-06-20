@@ -1,3 +1,6 @@
+
+
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -6,16 +9,16 @@ import { Loader2, Upload, X, Plus, Trash2 } from "lucide-react";
 import { ICategory, ISubCategoryItem } from "@/types/category.interface";
 import { useCategories } from "@/hooks/useCategories";
 import { useProducts } from "@/hooks/useProducts"; 
-import { useBrands } from "@/hooks/useBrands"; // 💡 ব্র্যান্ডস হুক ইম্পোর্ট করা হলো
+import { useBrands } from "@/hooks/useBrands"; 
 
 interface IShadeState {
   shadeName: string;
   shadeColorCode: string;
   shadeFile: File | null;
-  shadePreview: string; // এক্সিস্টিং ইমেজ URL অথবা নতুন প্রিভিউ URL হোল্ড করবে
+  shadePreview: string; 
   stock: number | "";
   status: "Active" | "Inactive";
-  isExisting?: boolean; // সার্ভারের পুরাতন ইমেজ নাকি নতুন ফাইল তা ট্র্যাক করার জন্য
+  isExisting?: boolean; 
 }
 
 interface EditProductModalProps {
@@ -27,17 +30,13 @@ interface EditProductModalProps {
 
 export default function EditProductModal({ isOpen, onClose, product, onSuccess }: EditProductModalProps) {
   const { categories, isLoading: isCategoriesLoading } = useCategories();
-  
-  // 💡 useBrands হুক থেকে ডাইনামিক ব্র্যান্ড লিস্ট এবং লোডিং স্টেট নিয়ে আসা হলো
   const { brands, isLoading: isBrandsLoading } = useBrands();
-  
-  // 💡 আপনার কাস্টম হুক থেকে মেথড এবং লোডিং স্টেট নিয়ে আসা হলো
   const { updateProduct, isSaving } = useProducts(product?.productCode);
 
   // --- FORM STATES ---
   const [productCode, setProductCode] = useState("");
   const [productName, setProductName] = useState("");
-  const [brand, setBrand] = useState(""); // এখানে সিলেক্টেড ব্র্যান্ডের ID থাকবে
+  const [brand, setBrand] = useState(""); 
   const [skinType, setSkinType] = useState("All");
   const [promotion, setPromotion] = useState("None");
   
@@ -49,6 +48,10 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
 
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSubCategory, setSelectedSubCategory] = useState("");
+  
+  // 💡 মেইকআপ বাদে অন্য ক্যাটাগরির জন্য ম্যানুয়াল স্টক স্টেট
+  const [manualStock, setManualStock] = useState<number | "">("");
+
   const [description, setDescription] = useState("");
   const [howToUse, setHowToUse] = useState("");
 
@@ -59,18 +62,15 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
   const [multiImages, setMultiImages] = useState<File[]>([]);
   const [multiImagePreviews, setMultiImagePreviews] = useState<string[]>([]);
 
-  // 💡 SHADES STATE
+  // SHADES STATE
   const [shades, setShades] = useState<IShadeState[]>([]);
 
-  // 💡 মডাল ওপেন হলে বা প্রোডাক্ট চেঞ্জ হলে এক্সিস্টিং ডাটা পপুলেট করা
+  // 💡 মডাল ওপেন হলে বা প্রোডাক্ট চেঞ্জ হলে ডাটা পপুলেট করা
   useEffect(() => {
     if (isOpen && product) {
       setProductCode(product.productCode || "");
       setProductName(product.name || "");
-      
-      // অবজেক্ট বা স্ট্রিং যেকোনো ফরমেটেই আসুক, ব্র্যান্ড আইডি সেট করা হচ্ছে
       setBrand(typeof product.brand === 'object' ? product.brand?._id : product.brand || "");
-      
       setSkinType(product.skinType || "All");
       setPromotion(product.promotion || "None");
       setSellPrice(product.price || "");
@@ -81,17 +81,20 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
       
       setSelectedCategory(typeof product.category === 'object' ? product.category?._id : product.category || "");
       setSelectedSubCategory(product.itemName || "");
+      
+      // 💡 এক্সিস্টিং টোটাল স্টক ম্যানুয়াল ইনপুটের জন্য পপুলেট করা
+      setManualStock(product.totalStock !== undefined ? product.totalStock : (product.stock || 0));
+
       setDescription(product.description || "");
       setHowToUse(product.howToUse || "");
       setExistingImages(product.commonImages || []);
       
-      // এক্সিস্টিং শেড থাকলে তা স্টেট-এ ম্যাপ করা
       if (product.shades && Array.isArray(product.shades)) {
         const loadedShades = product.shades.map((sh: any) => ({
           shadeName: sh.shadeName || "",
           shadeColorCode: sh.shadeColorCode || "#000000",
           shadeFile: null,
-          shadePreview: sh.shadeImages || "", 
+          shadePreview: sh.shadeImage || "", // ব্যাকএন্ড আর্কিটেকচার অনুযায়ী shadeImage ম্যাপ করা হলো 
           stock: sh.stock || "",
           status: sh.status || "Active",
           isExisting: true
@@ -101,7 +104,6 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
         setShades([]);
       }
 
-      // নিউ আপলোডস ক্লিয়ার
       setSingleImage(null);
       setSingleImagePreview(null);
       setMultiImages([]);
@@ -203,25 +205,27 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
     const matchedCat = categories?.find((cat) => cat._id === selectedCategory);
     const subCategoryGroupTitle = matchedCat?.subCategories.find((sub) =>
       sub.items.some((item) => (typeof item === "object" ? item.name : item) === selectedSubCategory)
-    )?.title || "";
+    )?.title || "General";
 
-    const totalStock = isMakeupSelected 
+    // 💡 ডাইনামিক ফাইনাল স্টক লজিক (মেইকআপ হলে সব শেডের যোগফল, না হলে ম্যানুয়াল ইনপুট ভ্যালু)
+    const finalTotalStock = isMakeupSelected 
       ? shades.reduce((acc, curr) => acc + Number(curr.stock || 0), 0)
-      : product.stock || 50;
+      : Number(manualStock || 0);
 
     const productPayload: any = {
       name: productName,
-      brand: brand || undefined, // 💡 ব্র্যান্ড আইডি যুক্ত করা হলো
+      brand: brand || undefined, 
       category: selectedCategory,
       subCategory: subCategoryGroupTitle,
-      itemName: selectedSubCategory,
+      itemName: selectedSubCategory || "General",
       price: Number(sellPrice),
       oldPrice: regularPrice ? Number(regularPrice) : undefined,
       description: description,
       howToUse: howToUse,
       skinType: skinType,
       promotion: promotion !== "None" ? promotion : undefined,
-      availability: totalStock > 0 ? "In Stock" : "Out of Stock",
+      totalStock: finalTotalStock, // 💡 ডাইনামিক টোটাল স্টক পাস করা হলো
+      availability: finalTotalStock > 0 ? "In Stock" : "Out of Stock",
       status: productStatus,
       weightOrVolume: Number(weightOrVolume),
       unit: unit,
@@ -229,13 +233,12 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
     };
 
     if (isMakeupSelected) {
-      productPayload.shades = shades.map((sh, idx) => ({
+      productPayload.shades = shades.map((sh) => ({
         shadeName: sh.shadeName,
         shadeColorCode: sh.shadeColorCode,
         stock: Number(sh.stock || 0),
         status: sh.status,
-        shadeImages: sh.isExisting ? sh.shadePreview : undefined,
-        index: idx
+        shadeImage: sh.isExisting ? sh.shadePreview : undefined // ব্যাকএন্ড স্ট্রাকচার অনুযায়ী shadeImage করা হলো
       }));
     }
 
@@ -244,16 +247,7 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
     if (singleImage) formData.append("commonImages", singleImage);
     multiImages.forEach((file) => formData.append("commonImages", file));
 
-    if (isMakeupSelected) {
-      shades.forEach((sh) => {
-        if (sh.shadeFile) {
-          formData.append("shadeImages", sh.shadeFile);
-        }
-      });
-    }
-
     try {
-      // 💡 আপনার কাস্টম API হুকের updateProduct মেথড এখানে ব্যবহার করা হলো
       await updateProduct({ productCode: product.productCode, formData });
       alert("Product updated successfully!");
       onSuccess();
@@ -304,7 +298,6 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="font-semibold text-slate-500 block mb-1">Brand</label>
-                    {/* 💡 ডাইনামিক ব্র্যান্ড সিলেক্টর */}
                     <select value={brand} onChange={(e) => setBrand(e.target.value)} className="w-full border rounded-lg p-2.5 bg-white">
                       <option value="">Select brand</option>
                       {brands?.map((br: any) => (
@@ -387,8 +380,8 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
                 </div>
               </div>
 
-              {/* SHADES MANAGEMENT CARD - CONDITIONAL */}
-              {isMakeupSelected && (
+              {/* 💡 SHADES MANAGEMENT CARD OR MANUAL STOCK - CONDITIONAL */}
+              {isMakeupSelected ? (
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
                   <div className="flex items-center justify-between border-b pb-2">
                     <h3 className="font-bold text-slate-800 text-sm">Product Shades Setup</h3>
@@ -438,6 +431,22 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
                     </div>
                   )}
                 </div>
+              ) : (
+                /* 💡 ক্যাটাগরি মেইকআপ না হলে সরাসরি ম্যানুয়াল টোটাল স্টক ইনপুট ফিল্ড আসবে */
+                selectedSubCategory && (
+                  <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2">
+                    <label className="font-semibold text-slate-700 block">Total Product Stock *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      required
+                      placeholder="Enter total stock quantity"
+                      value={manualStock}
+                      onChange={(e) => setManualStock(e.target.value !== "" ? Number(e.target.value) : "")}
+                      className="w-full sm:w-1/2 p-2.5 text-xs border rounded-lg bg-white focus:outline-none focus:border-orange-400 font-semibold"
+                    />
+                  </div>
+                )
               )}
 
               {/* DESCRIPTION & HOW TO USE */}
