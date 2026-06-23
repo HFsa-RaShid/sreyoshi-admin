@@ -18,6 +18,8 @@ export default function Sidebar() {
     { name: "All Products", href: "/products", icon: ShoppingBag },
     { name: "Add Products", href: "/add-products", icon: ShoppingBag },
     { name: "Customers", href: "/customers", icon: Users },
+    { name: "Coupon", href: "/coupons", icon: Users },
+    { name: "FAQ", href: "/faqs", icon: Users },
   ];
 
   const handleLogout = () => {

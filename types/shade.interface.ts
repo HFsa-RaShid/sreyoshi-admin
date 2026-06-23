@@ -11,13 +11,16 @@ export interface IShadeItem {
 export interface IShade {
   _id: string;
   category: string | { _id: string; name?: string; categoryName?: string }; 
-  subCategory: string;     // যেমন: EYES
-  itemName: string;         // যেমন: Eye Shadow
+  subCategory: string;     
+  itemName: string;         
   availableShades: IShadeItem[];
   status: "Active" | "Inactive";
   createdAt?: string;
   updatedAt?: string;
 }
+
+// 💡 ফিক্স: ফাইলের নিচে এই নতুন টাইপটি এক্সপোর্ট করে দিন
+export type IShadePayload = Omit<IShade, '_id' | 'createdAt' | 'updatedAt'>;
 
 
 export interface ISubCategoryItem {
@@ -47,15 +50,15 @@ export interface ICategory {
 export interface AddShadeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (payload: Omit<IShade, '_id' | 'createdAt' | 'updatedAt'>) => Promise<void>; 
-  categories: ICategory[]; // গ্লোবাল ICategory ইন্টারফেস ব্যবহার করা হলো
+  onSave: (payload: IShadePayload) => Promise<void>; // 
+  categories: ICategory[];
 }
 
 export interface IProductShadeState {
   shadeName: string;
   shadeColorCode: string;
-  shadeFile: File | null;   // 💡 মাল্টার (Multer) দিয়ে ব্যাকএন্ডে পাঠানোর জন্য আসল ফাইল
-  shadePreview: string;     // 💡 ব্রাউজারে ব্লব ইউআরএল বা পুরাতন ইমেজ ইউআরএল প্রিভিউয়ের জন্য
-  stock: number | "";       // ইনপুট হ্যান্ডেল করার জন্য নাম্বার অথবা খালি স্ট্রিং
+  shadeFile: File | null;  
+  shadePreview: string;     
+  stock: number | "";      
   status: "Active" | "Inactive";
 }
