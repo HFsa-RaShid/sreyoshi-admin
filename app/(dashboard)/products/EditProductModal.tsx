@@ -1,25 +1,23 @@
-
-
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Loader2, Upload, X, Plus, Trash2 } from "lucide-react";
-import { ICategory, ISubCategoryItem } from "@/types/category.interface";
+import { Loader2, Upload, X, CheckCircle2 } from "lucide-react";
+import { ICategory, ISubCategoryItem, IProductShadeState, IShadeItem } from "@/types/shade.interface"; 
 import { useCategories } from "@/hooks/useCategories";
 import { useProducts } from "@/hooks/useProducts"; 
 import { useBrands } from "@/hooks/useBrands"; 
+import { useShades } from "@/hooks/useShades";
 
-interface IShadeState {
-  shadeName: string;
-  shadeColorCode: string;
-  shadeFile: File | null;
-  shadePreview: string; 
-  stock: number | "";
-  status: "Active" | "Inactive";
-  isExisting?: boolean; 
-}
+import dynamic from "next/dynamic";
+const ReactQuill = dynamic(
+  async () => {
+    const { default: RQ } = await import("react-quill-new");
+    return RQ;
+  },
+  { ssr: false, loading: () => <div className="h-20 bg-slate-50 animate-pulse rounded-lg border" /> }
+);
+import "react-quill-new/dist/quill.snow.css"; 
 
 interface EditProductModalProps {
   isOpen: boolean;
@@ -49,23 +47,29 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSubCategory, setSelectedSubCategory] = useState("");
   
-  // 💡 মেইকআপ বাদে অন্য ক্যাটাগরির জন্য ম্যানুয়াল স্টক স্টেট
   const [manualStock, setManualStock] = useState<number | "">("");
 
   const [description, setDescription] = useState("");
   const [howToUse, setHowToUse] = useState("");
-
-  // ইমেজ স্টেট
   const [existingImages, setExistingImages] = useState<string[]>([]);
   const [singleImage, setSingleImage] = useState<File | null>(null);
   const [singleImagePreview, setSingleImagePreview] = useState<string | null>(null);
   const [multiImages, setMultiImages] = useState<File[]>([]);
   const [multiImagePreviews, setMultiImagePreviews] = useState<string[]>([]);
 
-  // SHADES STATE
-  const [shades, setShades] = useState<IShadeState[]>([]);
 
-  // 💡 মডাল ওপেন হলে বা প্রোডাক্ট চেঞ্জ হলে ডাটা পপুলেট করা
+  const [shades, setShades] = useState<IProductShadeState[]>([]);
+
+
+  const { shades: dbShadesContext, isLoading: isDbShadesLoading } = useShades(selectedSubCategory);
+
+  
+  const availableDbShades = useMemo<IShadeItem[]>(() => {
+    if (!selectedSubCategory) return [];
+    const rawData = Array.isArray(dbShadesContext) ? dbShadesContext[0] : dbShadesContext;
+    return (rawData?.availableShades || []).filter((s: IShadeItem) => s.status === "Active");
+  }, [dbShadesContext, selectedSubCategory]);
+
   useEffect(() => {
     if (isOpen && product) {
       setProductCode(product.productCode || "");
@@ -82,7 +86,6 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
       setSelectedCategory(typeof product.category === 'object' ? product.category?._id : product.category || "");
       setSelectedSubCategory(product.itemName || "");
       
-      // 💡 এক্সিস্টিং টোটাল স্টক ম্যানুয়াল ইনপুটের জন্য পপুলেট করা
       setManualStock(product.totalStock !== undefined ? product.totalStock : (product.stock || 0));
 
       setDescription(product.description || "");
@@ -94,10 +97,9 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
           shadeName: sh.shadeName || "",
           shadeColorCode: sh.shadeColorCode || "#000000",
           shadeFile: null,
-          shadePreview: sh.shadeImage || "", // ব্যাকএন্ড আর্কিটেকচার অনুযায়ী shadeImage ম্যাপ করা হলো 
+          shadePreview: sh.shadeImage || "", 
           stock: sh.stock || "",
-          status: sh.status || "Active",
-          isExisting: true
+          status: sh.status || "Active"
         }));
         setShades(loadedShades);
       } else {
@@ -111,13 +113,11 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
     }
   }, [isOpen, product]);
 
-  // বর্তমান সিলেক্টেড ক্যাটাগরি "Makeup" কিনা চেক করার মেমো
   const isMakeupSelected = useMemo(() => {
     const matched = categories?.find((cat) => cat._id === selectedCategory);
     return matched?.name?.toLowerCase() === "makeup";
   }, [selectedCategory, categories]);
 
-  // সাব-ক্যাটাগরি ফিল্টার মেমো
   const availableSubCategoryItems = useMemo(() => {
     if (!categories || categories.length === 0) return [];
     const matchedCat = categories.find((cat) => cat._id === selectedCategory);
@@ -168,22 +168,39 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
     setMultiImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // --- SHADES HANDLERS ---
-  const addShadeField = () => {
-    setShades((prev) => [
-      ...prev,
-      { shadeName: "", shadeColorCode: "#000000", shadeFile: null, shadePreview: "", stock: "", status: "Active", isExisting: false }
-    ]);
+  // --- 💡 বাটনে ক্লিক করে শেড সিলেক্ট/ডিসিলেক্ট করার লজিক ---
+  const handleToggleShade = (dbShade: IShadeItem) => {
+    const isAlreadySelected = shades.some(
+      (s) => s.shadeName.trim().toLowerCase() === dbShade.shadeName.trim().toLowerCase()
+    );
+
+    if (isAlreadySelected) {
+      const shadeToRemove = shades.find((s) => s.shadeName.trim().toLowerCase() === dbShade.shadeName.trim().toLowerCase());
+      if (shadeToRemove?.shadePreview && shadeToRemove.shadePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(shadeToRemove.shadePreview);
+      }
+      setShades((prev) => prev.filter(
+        (s) => s.shadeName.trim().toLowerCase() !== dbShade.shadeName.trim().toLowerCase()
+      ));
+    } else {
+      setShades((prev) => [
+        ...prev,
+        {
+          shadeName: dbShade.shadeName,
+          shadeColorCode: dbShade.shadeColorCode,
+          shadeFile: null,
+          shadePreview: "", 
+          stock: "", 
+          status: "Active"
+        }
+      ]);
+    }
   };
 
-  const removeShadeField = (index: number) => {
-    setShades((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleShadeChange = (index: number, field: keyof IShadeState, value: any) => {
+  const handleShadeChange = (index: number, field: keyof IProductShadeState, value: any) => {
     setShades((prev) => {
       const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
+      updated[index] = { ...updated[index], [field]: value } as IProductShadeState;
       return updated;
     });
   };
@@ -193,8 +210,19 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
       const file = e.target.files[0];
       handleShadeChange(index, "shadeFile", file);
       handleShadeChange(index, "shadePreview", URL.createObjectURL(file));
-      handleShadeChange(index, "isExisting", false);
     }
+  };
+
+  const removeShadeImage = (index: number) => {
+    if (shades[index].shadePreview && shades[index].shadePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(shades[index].shadePreview);
+    }
+    setShades((prev) => {
+      const updated = [...prev];
+      updated[index].shadeFile = null;
+      updated[index].shadePreview = "";
+      return updated;
+    });
   };
 
   // --- SUBMIT UPDATE ---
@@ -207,7 +235,6 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
       sub.items.some((item) => (typeof item === "object" ? item.name : item) === selectedSubCategory)
     )?.title || "General";
 
-    // 💡 ডাইনামিক ফাইনাল স্টক লজিক (মেইকআপ হলে সব শেডের যোগফল, না হলে ম্যানুয়াল ইনপুট ভ্যালু)
     const finalTotalStock = isMakeupSelected 
       ? shades.reduce((acc, curr) => acc + Number(curr.stock || 0), 0)
       : Number(manualStock || 0);
@@ -224,7 +251,7 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
       howToUse: howToUse,
       skinType: skinType,
       promotion: promotion !== "None" ? promotion : undefined,
-      totalStock: finalTotalStock, // 💡 ডাইনামিক টোটাল স্টক পাস করা হলো
+      totalStock: finalTotalStock, 
       availability: finalTotalStock > 0 ? "In Stock" : "Out of Stock",
       status: productStatus,
       weightOrVolume: Number(weightOrVolume),
@@ -238,7 +265,7 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
         shadeColorCode: sh.shadeColorCode,
         stock: Number(sh.stock || 0),
         status: sh.status,
-        shadeImage: sh.isExisting ? sh.shadePreview : undefined // ব্যাকএন্ড স্ট্রাকচার অনুযায়ী shadeImage করা হলো
+        shadeImage: sh.shadeFile ? "" : sh.shadePreview 
       }));
     }
 
@@ -246,6 +273,14 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
     
     if (singleImage) formData.append("commonImages", singleImage);
     multiImages.forEach((file) => formData.append("commonImages", file));
+
+    if (isMakeupSelected) {
+      shades.forEach((sh) => {
+        if (sh.shadeFile) {
+          formData.append("shadeImages", sh.shadeFile);
+        }
+      });
+    }
 
     try {
       await updateProduct({ productCode: product.productCode, formData });
@@ -258,14 +293,23 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
     }
   };
 
+  const quillModules = {
+    toolbar: [
+      [{ 'header': [1, 2, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{'list': 'ordered'}, {'list': 'bullet'}],
+      ['clean']
+    ],
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
-      <div className="w-full max-w-5xl rounded-2xl bg-[#FAFAFA] p-6 shadow-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+      <div className="w-full max-w-5xl rounded-2xl bg-[#FAFAFA] p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         
         {/* MODAL HEADER */}
         <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
           <div>
-            <h2 className="text-xl font-bold text-[#1E293B] font-serif">📝 Edit Product Configuration</h2>
+            <h2 className="text-xl font-bold text-[#1E293B]">📝 Edit Product Configuration</h2>
             <p className="text-xs text-slate-400 mt-0.5">Modify properties for Code: {productCode}</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
@@ -300,11 +344,7 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
                     <label className="font-semibold text-slate-500 block mb-1">Brand</label>
                     <select value={brand} onChange={(e) => setBrand(e.target.value)} className="w-full border rounded-lg p-2.5 bg-white">
                       <option value="">Select brand</option>
-                      {brands?.map((br: any) => (
-                        <option key={br._id} value={br._id}>
-                          {br.name}
-                        </option>
-                      ))}
+                      {brands?.map((br: any) => <option key={br._id} value={br._id}>{br.name}</option>)}
                     </select>
                   </div>
                   <div>
@@ -380,84 +420,118 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
                 </div>
               </div>
 
-              {/* 💡 SHADES MANAGEMENT CARD OR MANUAL STOCK - CONDITIONAL */}
+              {/* 💡 SHADES CONFIGURATION PANEL (FULLY AUTOMATED LIKE ADD MODAL) */}
               {isMakeupSelected ? (
-                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between border-b pb-2">
-                    <h3 className="font-bold text-slate-800 text-sm">Product Shades Setup</h3>
-                    <button type="button" onClick={addShadeField} className="flex items-center gap-1 bg-orange-500 text-white font-bold px-2.5 py-1.5 rounded-lg">
-                      <Plus size={12} /> Add Shade
-                    </button>
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-5">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800">Select Item Shades & Enter Stock</h3>
+                    <p className="text-xs text-slate-400">Click to select/deselect database shades for this product.</p>
                   </div>
 
-                  {shades.length === 0 ? (
-                    <p className="text-center py-4 text-slate-400 italic">No shades added for this makeup product.</p>
+                  {/* ডাটাবেজ শেড বাটন গ্রিড */}
+                  {isDbShadesLoading ? (
+                    <p className="text-xs text-slate-400 animate-pulse">Loading database configurations...</p>
+                  ) : availableDbShades.length === 0 ? (
+                    <p className="text-xs text-red-400 italic bg-red-50/50 p-3 rounded-xl border border-red-100">
+                      No active database shades found for &quot;{selectedSubCategory}&quot;.
+                    </p>
                   ) : (
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                      {shades.map((shade, idx) => (
-                        <div key={idx} className="flex flex-col md:flex-row items-center gap-3 p-3 bg-slate-50 rounded-lg border">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 flex-1 w-full">
-                            <div>
-                              <input type="text" required placeholder="Shade Name" value={shade.shadeName} onChange={(e) => handleShadeChange(idx, "shadeName", e.target.value)} className="w-full p-1.5 border rounded bg-white" />
+                    <div className="flex flex-wrap gap-2 max-h-[150px] overflow-y-auto p-1 border rounded-xl bg-slate-50/50">
+                      {availableDbShades.map((dbShade, idx) => {
+                        const isSelected = shades.some(
+                          (s) => s.shadeName.trim().toLowerCase() === dbShade.shadeName.trim().toLowerCase()
+                        );
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleToggleShade(dbShade)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-medium transition-all duration-200 select-none ${
+                              isSelected
+                                ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm ring-1 ring-orange-500/30 font-semibold"
+                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+                            }`}
+                          >
+                            <div 
+                              className="w-3 h-3 rounded-full border border-black/10 flex-shrink-0" 
+                              style={{ backgroundColor: dbShade.shadeColorCode }}
+                            />
+                            <span>{dbShade.shadeName}</span>
+                            {isSelected && <CheckCircle2 size={12} className="text-orange-600 ml-0.5 flex-shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* সিলেক্টেড শেডগুলোর ব্রেকডাউন প্যানেল (ইমেজ ও স্টক) */}
+                  {shades.length > 0 && (
+                    <div className="pt-3 border-t border-slate-100 space-y-2.5">
+                      <label className="text-xs font-bold text-slate-700 block">Selected Shades Breakdown</label>
+                      <div className="space-y-2">
+                        {shades.map((shade, idx) => (
+                          <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                            
+                            <div className="flex items-center gap-2 min-w-[120px]">
+                              <div className="w-3.5 h-3.5 rounded-full border shadow-sm flex-shrink-0" style={{ backgroundColor: shade.shadeColorCode }} />
+                              <span className="text-xs font-bold text-slate-800">{shade.shadeName}</span>
                             </div>
-                            <div className="flex items-center gap-1.5 border rounded bg-white p-1">
-                              <input type="color" value={shade.shadeColorCode} onChange={(e) => handleShadeChange(idx, "shadeColorCode", e.target.value)} className="w-6 h-6 border-0 cursor-pointer" />
-                              <span className="font-mono text-[10px]">{shade.shadeColorCode}</span>
+
+                            <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm flex-1 max-w-xs">
+                              {shade.shadePreview ? (
+                                <div className="relative w-8 h-7 rounded border bg-slate-100 overflow-hidden group/img flex items-center justify-center flex-shrink-0">
+                                  <img src={shade.shadePreview} className="w-full h-full object-cover" alt="shade preview" />
+                                  <button type="button" onClick={() => removeShadeImage(idx)} className="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity"><X size={10} /></button>
+                                </div>
+                              ) : (
+                                <label className="cursor-pointer text-[10px] text-orange-500 font-bold flex items-center gap-1 w-full justify-center py-1 bg-orange-50/30 rounded hover:bg-orange-50 flex-shrink-0">
+                                  <Upload size={10} /> Upload Image
+                                  <input type="file" accept="image/*" onChange={(e) => handleShadeImageChange(idx, e)} className="hidden" />
+                                </label>
+                              )}
+                              <span className="text-[10px] text-slate-400 truncate flex-1">
+                                {shade.shadeFile ? shade.shadeFile.name : (shade.shadePreview ? "Server Image Attached" : "Image required *")}
+                              </span>
                             </div>
-                            <div>
-                              <input type="number" required placeholder="Stock" value={shade.stock} onChange={(e) => handleShadeChange(idx, "stock", e.target.value !== "" ? Number(e.target.value) : "")} className="w-full p-1.5 border rounded bg-white" />
-                            </div>
-                            <div>
-                              <div className="border rounded bg-white p-1 flex items-center justify-between">
-                                {shade.shadePreview ? (
-                                  <div className="relative w-6 h-5 border rounded overflow-hidden">
-                                    <img src={shade.shadePreview} className="w-full h-full object-cover" />
-                                    <button type="button" onClick={() => { handleShadeChange(idx, "shadeFile", null); handleShadeChange(idx, "shadePreview", ""); handleShadeChange(idx, "isExisting", false); }} className="absolute inset-0 bg-black/40 text-white flex items-center justify-center opacity-0 hover:opacity-100"><X size={8} /></button>
-                                  </div>
-                                ) : (
-                                  <label className="cursor-pointer text-[10px] text-orange-400 font-semibold flex items-center gap-1">
-                                    <Upload size={10} /> Upload
-                                    <input type="file" accept="image/*" onChange={(e) => handleShadeImageChange(idx, e)} className="hidden" />
-                                  </label>
-                                )}
-                              </div>
+
+                            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                              <span className="text-[10px] text-slate-500">Stock:</span>
+                              <input
+                                type="number"
+                                min="0"
+                                required
+                                placeholder="Qty"
+                                value={shade.stock}
+                                onChange={(e) => handleShadeChange(idx, "stock", e.target.value !== "" ? Number(e.target.value) : "")}
+                                className="w-20 p-1 text-center text-xs border rounded bg-white focus:outline-none focus:border-orange-500 font-bold text-slate-800 shadow-sm"
+                              />
                             </div>
                           </div>
-                          <button type="button" onClick={() => removeShadeField(idx)} className="text-slate-400 hover:text-red-500">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
               ) : (
-                /* 💡 ক্যাটাগরি মেইকআপ না হলে সরাসরি ম্যানুয়াল টোটাল স্টক ইনপুট ফিল্ড আসবে */
                 selectedSubCategory && (
                   <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2">
                     <label className="font-semibold text-slate-700 block">Total Product Stock *</label>
-                    <input
-                      type="number"
-                      min="0"
-                      required
-                      placeholder="Enter total stock quantity"
-                      value={manualStock}
-                      onChange={(e) => setManualStock(e.target.value !== "" ? Number(e.target.value) : "")}
-                      className="w-full sm:w-1/2 p-2.5 text-xs border rounded-lg bg-white focus:outline-none focus:border-orange-400 font-semibold"
-                    />
+                    <input type="number" min="0" required placeholder="Enter total stock" value={manualStock} onChange={(e) => setManualStock(e.target.value !== "" ? Number(e.target.value) : "")} className="w-full sm:w-1/2 p-2.5 text-xs border rounded-lg bg-white focus:outline-none focus:border-orange-400 font-semibold" />
                   </div>
                 )
               )}
 
-              {/* DESCRIPTION & HOW TO USE */}
+              {/* RICH TEXT EDITOR PANEL */}
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                <div>
-                  <label className="font-semibold text-slate-500 block mb-1">Description</label>
-                  <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full border rounded-lg p-3 outline-none focus:border-orange-400 resize-none" placeholder="Detailed specifications..." />
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-700 block">Description</label>
+                  <ReactQuill theme="snow" value={description} onChange={setDescription} modules={quillModules} placeholder="Write detailed description here..." />
                 </div>
-                <div>
-                  <label className="font-semibold text-slate-500 block mb-1">How To Use</label>
-                  <textarea value={howToUse} onChange={(e) => setHowToUse(e.target.value)} rows={3} className="w-full border rounded-lg p-3 outline-none focus:border-orange-400 resize-none" placeholder="Application guide..." />
+                
+                <div className="space-y-1 pt-2">
+                  <label className="font-semibold text-slate-700 block">How To Use</label>
+                  <ReactQuill theme="snow" value={howToUse} onChange={setHowToUse} modules={quillModules} placeholder="Write instructions here..." />
                 </div>
               </div>
 
@@ -468,7 +542,6 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
               <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
                 <h3 className="font-bold text-slate-800 text-sm">Media & Images</h3>
                 
-                {/* CURRENT IMAGES */}
                 {existingImages.length > 0 && (
                   <div>
                     <span className="block font-semibold text-slate-400 text-[10px] uppercase tracking-wider mb-2">Active Server Images</span>
@@ -482,15 +555,14 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
                   </div>
                 )}
 
-                {/* NEW SINGLE IMAGE */}
                 <div className="border border-dashed border-slate-200 rounded-xl p-4 bg-[#F8FAFC] text-center min-h-[100px] flex items-center justify-center relative">
                   {singleImagePreview ? (
                     <div className="relative w-full h-20 flex items-center justify-center">
-                      <img src={singleImagePreview} className="max-h-full object-contain rounded" />
+                      <img src={singleImagePreview} className="max-h-full object-contain rounded" alt="main preview" />
                       <button type="button" onClick={() => { setSingleImage(null); setSingleImagePreview(null); }} className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full"><X size={10} /></button>
                     </div>
                   ) : (
-                    <label className="cursor-pointer block">
+                    <label className="cursor-pointer block w-full">
                       <Upload className="w-5 h-5 text-orange-400 mx-auto mb-1" />
                       <span className="font-bold text-slate-700 block">Replace Main Image</span>
                       <input type="file" accept="image/*" onChange={handleSingleImageChange} className="hidden" />
@@ -498,19 +570,18 @@ export default function EditProductModal({ isOpen, onClose, product, onSuccess }
                   )}
                 </div>
 
-                {/* NEW GALLERY IMAGES */}
                 <div className="border border-dashed border-slate-200 rounded-xl p-4 bg-[#F8FAFC] text-center min-h-[100px] flex items-center justify-center relative">
                   {multiImagePreviews.length > 0 ? (
                     <div className="grid grid-cols-2 gap-2 w-full">
                       {multiImagePreviews.map((src, idx) => (
                         <div key={idx} className="relative bg-white border border-slate-200 p-1 rounded-lg flex items-center justify-center h-11 shadow-sm">
-                          <img src={src} className="max-h-full object-contain" />
+                          <img src={src} className="max-h-full object-contain" alt="gallery preview" />
                           <button type="button" onClick={() => removeMultiImage(idx)} className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full"><X size={8} /></button>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <label className="cursor-pointer block">
+                    <label className="cursor-pointer block w-full">
                       <Upload className="w-5 h-5 text-orange-400 mx-auto mb-1" />
                       <span className="font-bold text-slate-700 block">Upload New Gallery Files</span>
                       <input type="file" accept="image/*" multiple onChange={handleMultiImageChange} className="hidden" />
