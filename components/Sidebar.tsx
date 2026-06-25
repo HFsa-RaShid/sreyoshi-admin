@@ -4,31 +4,34 @@ import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, ShoppingBag, FolderOpen, Layers, Users, LogOut, Sparkles } from "lucide-react";
+import { signOut } from "next-auth/react";
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
+  
 
   // সাইডবারের সমস্ত রাউটের লিস্ট
   const menuItems = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Orders", href: "/orders", icon: FolderOpen },
     { name: "Categories", href: "/categories", icon: FolderOpen },
     { name: "Shades Config", href: "/shades-config", icon: Layers },
     { name: "Brands Config", href: "/brands-config", icon: Layers },
     { name: "All Products", href: "/products", icon: ShoppingBag },
     { name: "Add Products", href: "/add-products", icon: ShoppingBag },
-    { name: "Customers", href: "/customers", icon: Users },
+    { name: "Delivery Charge", href: "/deliveryManagement", icon: Users },
+    { name: "Users", href: "/users", icon: Users },
     { name: "Coupon", href: "/coupons", icon: Users },
     { name: "FAQ", href: "/faqs", icon: Users },
   ];
 
-  const handleLogout = () => {
-    localStorage.removeItem("admin_token");
-    router.push("/");
+  // 🎯 লগআউট ফাংশন ফিক্স করা হলো
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: "/" });
   };
 
   return (
-    <aside className="w-64 bg-[#1E2E24] text-white h-screen fixed top-0 left-0 flex flex-col justify-between z-20 shadow-xl font-sans">
+    <aside className="w-68 bg-[#1E2E24] text-white h-screen fixed top-0 left-0 flex flex-col justify-between z-20 shadow-xl font-sans">
       <div>
         {/* Logo Section */}
         <div className="p-6 border-b border-white/10 flex items-center gap-2.5">
@@ -53,7 +56,7 @@ export default function Sidebar() {
                 href={item.href}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all ${
                   isActive 
-                    ? "bg-[#FF3F6C] text-white shadow-md shadow-[#FF3F6C]/20" 
+                    ? "bg-white text-black shadow-md shadow-[#FF3F6C]/20" 
                     : "text-gray-300 hover:bg-white/5 hover:text-white"
                 }`}
               >

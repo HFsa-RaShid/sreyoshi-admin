@@ -4,7 +4,7 @@ import React from "react";
 
 export default function DashboardOverview() {
   return (
-    <div>
+    <div className="p-6">
       <div className="mb-8">
         <h1 className="text-2xl font-bold font-serif text-gray-900">Dashboard Overview</h1>
         <p className="text-xs text-gray-400 mt-1">Welcome back! Here is what&apos;s happening with your store today.</p>

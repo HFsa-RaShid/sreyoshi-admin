@@ -2,6 +2,17 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 
+function decodeJwt(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(base64));
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Credentials({
@@ -14,48 +25,53 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!credentials?.email || !credentials?.password) return null;
 
         try {
-          const res = await fetch("http://localhost:8080/api/v1/auth/login", {
+          const email = String(credentials.email).trim().toLowerCase();
+          const password = String(credentials.password);
+
+          const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/auth/login`, {
             method: "POST",
-            body: JSON.stringify({
-              email: credentials.email,
-              password: credentials.password,
-            }),
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "Accept": "application/json"
+            },
+            body: JSON.stringify({ identity: email, password }),
+            cache: 'no-store'
           });
 
-          const data = await res.json();
+          if (!res.ok) return null;
 
-          if (res.ok && data?.success && data?.accessToken) {
-            // ⚡ NextAuth-এর স্ট্যান্ডার্ড অনুযায়ী অবজেক্ট রিটার্ন করা হলো
-            return {
-              id: "admin-id", 
-              email: credentials.email as string,
-              accessToken: data.accessToken,
-              refreshToken: data.refreshToken || null, 
-            };
-          }
+          const responseData = await res.json();
+          const actualData = responseData?.data || responseData;
+          const token = responseData?.accessToken || responseData?.token || actualData?.accessToken;
 
-          return null;
+          if (!token) return null;
+
+          const decodedToken = decodeJwt(token);
+
+          // ফ্রন্টএন্ড সেশনের জন্য ডাটা রিটার্ন
+          return {
+            id: decodedToken?._id || "admin-id", 
+            email: email,
+            role: decodedToken?.role || "admin", 
+            accessToken: token,
+            refreshToken: responseData?.refreshToken || actualData?.refreshToken || null, 
+          };
+
         } catch (error) {
-          console.error("Backend Auth Error:", error);
+          console.error("💥 NextAuth Authorize Error:", error);
           return null;
         }
       },
     }),
   ],
-  // ⚡ সেশন টাইপ JWT হিসেবে লক করা হলো যাতে কুকি তৈরি হতে পারে
-  session: {
-    strategy: "jwt",
-    maxAge: 1 * 24 * 60 * 60, // ১ দিন সেশন থাকবে
-  },
-  pages: {
-    signIn: "/", 
-  },
+  session: { strategy: "jwt", maxAge: 1 * 24 * 60 * 60 },
+  pages: { signIn: "/" },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.accessToken = (user as any).accessToken;
         token.refreshToken = (user as any).refreshToken;
+        token.role = (user as any).role;
       }
       return token;
     },
@@ -63,6 +79,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         (session.user as any).accessToken = token.accessToken;
         (session.user as any).refreshToken = token.refreshToken;
+        (session.user as any).role = token.role;
       }
       return session;
     },

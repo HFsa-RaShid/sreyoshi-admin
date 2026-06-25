@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SessionProvider } from "next-auth/react";
-import ReactQueryProvider from "@/providers/ReactQueryProvider"; // 👈 আপনার তৈরি করা ReactQueryProvider ফাইলটি ইম্পোর্ট করুন
+import ReactQueryProvider from "@/providers/ReactQueryProvider"; 
 import "./globals.css";
 
 export const metadata: Metadata = {
