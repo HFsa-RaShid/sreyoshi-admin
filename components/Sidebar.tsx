@@ -23,9 +23,9 @@ export default function Sidebar() {
     { name: "Users", href: "/users", icon: Users },
     { name: "Coupon", href: "/coupons", icon: Users },
     { name: "FAQ", href: "/faqs", icon: Users },
+    { name: "Shop Settings", href: "/shop-settings", icon: Users },
   ];
 
-  // 🎯 লগআউট ফাংশন ফিক্স করা হলো
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/" });
   };
