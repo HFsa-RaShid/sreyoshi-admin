@@ -145,7 +145,7 @@ export default function AddProductPage() {
   }
 
   return (
-    <div className="min-h-screen p-8 bg-[#FAFAFA] text-slate-800 antialiased text-xs">
+    <div className="min-h-screen p-2 md:p-6 bg-[#FAFAFA] text-slate-800 antialiased text-xs">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-[#1E293B] font-serif">Add New Product</h1>
         <p className="text-slate-400 mt-1">Fill out specifications and dynamic product variants below.</p>
